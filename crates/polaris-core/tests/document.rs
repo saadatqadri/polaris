@@ -244,6 +244,34 @@ fn replace_range_clamps_out_of_bounds() {
     assert_eq!(doc.text(), "ax!");
 }
 
+// --- find ---
+
+#[test]
+fn find_matches_ascii_case_insensitively() {
+    let doc = Document::from_str("Hello hello HELLO");
+    assert_eq!(doc.find("hello"), vec![0..5, 6..11, 12..17]);
+}
+
+#[test]
+fn find_returns_char_ranges_with_multibyte_text() {
+    let doc = Document::from_str("café au lait, café crème");
+    let matches = doc.find("café");
+    assert_eq!(matches, vec![0..4, 14..18]);
+}
+
+#[test]
+fn find_empty_query_and_no_match() {
+    let doc = Document::from_str("text");
+    assert!(doc.find("").is_empty());
+    assert!(doc.find("missing").is_empty());
+}
+
+#[test]
+fn find_is_non_overlapping() {
+    let doc = Document::from_str("aaaa");
+    assert_eq!(doc.find("aa"), vec![0..2, 2..4]);
+}
+
 // --- word count ---
 
 #[test]

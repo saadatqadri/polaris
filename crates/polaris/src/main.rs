@@ -12,20 +12,14 @@ use polaris_notion::{NotionClient, PublishMode};
 use std::fs;
 use std::path::PathBuf;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+// `main` stays synchronous: iced (with its tokio feature) drives its own
+// runtime and panics if started inside another one. Only the async commands
+// (deploy, the TUI's deploy path) get a runtime.
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::Gui { file }) => {
-            if let Some(ref f) = file {
-                if f.exists() {
-                    // Validate readability up front; the GUI boot can't return errors.
-                    fs::read_to_string(f).with_context(|| format!("Cannot read file: {:?}", f))?;
-                }
-            }
-            gui::run(file).map_err(|e| anyhow::anyhow!("GUI failed: {e}"))?;
-        }
+        Some(Commands::Gui { file }) => run_gui(file),
 
         Some(Commands::New { filename }) => {
             let path = PathBuf::from(&filename);
@@ -36,27 +30,22 @@ async fn main() -> Result<()> {
                     filename
                 );
             }
-            fs::write(&path, "").context("Failed to create file")?;
-            println!("Created: {}", filename);
-
-            let buffer = TextBuffer::from_file(path)?;
-            run_editor(buffer).await?;
+            run_gui(Some(path))
         }
 
-        Some(Commands::Deploy { file, page, mode }) => {
-            deploy_file(file, page, &mode).await?;
-        }
+        None => run_gui(cli.file),
 
-        Some(Commands::Config {
-            token,
-            default_page,
-        }) => {
-            configure(token, default_page)?;
+        Some(command) => {
+            let runtime = tokio::runtime::Runtime::new().context("Failed to start runtime")?;
+            runtime.block_on(run_command(command))
         }
+    }
+}
 
-        None => {
-            if let Some(file) = cli.file {
-                // Open existing file or create new
+async fn run_command(command: Commands) -> Result<()> {
+    match command {
+        Commands::Tui { file } => {
+            if let Some(file) = file {
                 let buffer = if file.exists() {
                     TextBuffer::from_file(file)?
                 } else {
@@ -64,16 +53,31 @@ async fn main() -> Result<()> {
                     fs::write(&file, "").context("Failed to create file")?;
                     TextBuffer::from_file(file)?
                 };
-
-                run_editor(buffer).await?;
+                run_editor(buffer).await
             } else {
-                // No file specified, create a new untitled buffer
-                run_editor(TextBuffer::new()).await?;
+                run_editor(TextBuffer::new()).await
             }
         }
-    }
 
-    Ok(())
+        Commands::Deploy { file, page, mode } => deploy_file(file, page, &mode).await,
+
+        Commands::Config {
+            token,
+            default_page,
+        } => configure(token, default_page),
+
+        Commands::Gui { .. } | Commands::New { .. } => unreachable!("handled in main"),
+    }
+}
+
+fn run_gui(file: Option<PathBuf>) -> Result<()> {
+    if let Some(ref f) = file {
+        if f.exists() {
+            // Validate readability up front; the GUI boot can't return errors.
+            fs::read_to_string(f).with_context(|| format!("Cannot read file: {:?}", f))?;
+        }
+    }
+    gui::run(file).map_err(|e| anyhow::anyhow!("GUI failed: {e}"))
 }
 
 async fn run_editor(buffer: TextBuffer) -> Result<()> {

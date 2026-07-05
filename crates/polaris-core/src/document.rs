@@ -85,6 +85,31 @@ impl Document {
         self.text().unicode_words().count()
     }
 
+    /// All non-overlapping match ranges (char indices) of `query`,
+    /// ASCII-case-insensitively. Empty query matches nothing.
+    pub fn find(&self, query: &str) -> Vec<Range<usize>> {
+        let needle: Vec<char> = query.chars().collect();
+        if needle.is_empty() {
+            return Vec::new();
+        }
+        let haystack: Vec<char> = self.text().chars().collect();
+        let mut matches = Vec::new();
+        let mut i = 0;
+        while i + needle.len() <= haystack.len() {
+            let hit = haystack[i..i + needle.len()]
+                .iter()
+                .zip(&needle)
+                .all(|(a, b)| a.eq_ignore_ascii_case(b));
+            if hit {
+                matches.push(i..i + needle.len());
+                i += needle.len();
+            } else {
+                i += 1;
+            }
+        }
+        matches
+    }
+
     pub fn can_undo(&self) -> bool {
         self.history.can_undo()
     }

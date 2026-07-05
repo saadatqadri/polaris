@@ -14,13 +14,19 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Open a file in the GUI editor (Phase 1; becomes the default at M5)
+    /// Open a file in the GUI editor (also the default: `polaris [file]`)
     Gui {
         /// File to open (created if missing)
         file: Option<PathBuf>,
     },
 
-    /// Create a new markdown file
+    /// Open a file in the legacy terminal editor (frozen; removed at M5)
+    Tui {
+        /// File to open (created if missing)
+        file: Option<PathBuf>,
+    },
+
+    /// Create a new markdown file and open it in the editor
     New {
         /// Name of the file to create
         filename: String,

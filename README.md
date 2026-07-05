@@ -35,10 +35,13 @@ sudo cp target/release/polaris /usr/local/bin/
 ### 1. Create a New File
 
 ```bash
-polaris new draft.md
+polaris new draft.md   # or just: polaris draft.md
 ```
 
-This creates a new markdown file and opens it in the editor.
+This creates a new markdown file and opens it in the GUI editor — a quiet,
+centered page with fixed typography, silent autosave, Cmd/Ctrl+F find, and
+Cmd/Ctrl+Z undo. The legacy terminal editor remains available as
+`polaris tui <file>` until the GUI reaches full parity (M5).
 
 ### 2. Writing in Polaris
 

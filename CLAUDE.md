@@ -55,8 +55,16 @@ this file is only the condensed handover summary.
     core owns undo grouping. Custom cosmic-text widget deferred to Phase 2.
     Owner is lukewarm on the Quattro typeface — swap = `gui/fonts.rs` +
     `assets/fonts/`, nothing else.
-  - **M3:** silent debounced autosave, find (Ctrl+F), word-jump, in-window
-    save-as prompt.
+  - **M3 — landed 2026-07-05, pending owner's hands-on check:** silent
+    debounced autosave (1s, Cmd+S forces + opens save-as when untitled),
+    `● saved` chrome, Cmd+F find (chrome bar, Enter/Shift+Enter cycle, Esc
+    dismiss), in-window save-as, and the GUI is now the default:
+    `polaris [file]` and `polaris new` open the GUI; the frozen TUI moved to
+    `polaris tui`. The update loop (edit→debounce→autosave, save-as, find)
+    is covered by headless unit tests in `gui/mod.rs`; what tests can't
+    cover is physical typing into the window. NOTE: `main` must stay
+    synchronous — iced (tokio feature) panics inside `#[tokio::main]`;
+    async commands get their own runtime in `run_command`.
   - **M4:** fading chrome (0.6s fade, 1.2s return), live word count, smart
     punctuation on input (`"`→“”, `--`→—, `...`→…), light/dark themes
     following the OS.
