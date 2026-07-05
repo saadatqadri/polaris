@@ -1,0 +1,12 @@
+[package]
+name = "polaris-core"
+description = "UI-agnostic document core for Polaris: rope buffer, grapheme-aware cursors, undo/redo, typography"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ropey = "1.6"
+unicode-segmentation = "1.11"

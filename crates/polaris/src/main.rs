@@ -1,14 +1,13 @@
 mod cli;
 mod config;
 mod editor;
-mod notion;
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
 use editor::{Editor, TextBuffer};
-use notion::{NotionClient, PublishMode};
+use polaris_notion::{NotionClient, PublishMode};
 use std::fs;
 use std::path::PathBuf;
 
@@ -94,7 +93,10 @@ async fn deploy_file(file: PathBuf, page_id: Option<String>, mode_str: &str) -> 
         _ => PublishMode::Append,
     };
 
-    let client = NotionClient::new(&config)?;
+    let token = config.notion.token.clone().ok_or_else(|| {
+        anyhow::anyhow!("Notion token not configured. Please set it in ~/.polaris.toml")
+    })?;
+    let client = NotionClient::new(token);
 
     println!("Deploying to Notion...");
     let url = client.deploy(&markdown, &page_id, mode).await?;

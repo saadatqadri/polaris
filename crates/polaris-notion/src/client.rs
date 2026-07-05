@@ -1,8 +1,7 @@
 use anyhow::{Context, Result, anyhow};
 use reqwest::Client;
 use serde_json::{json, Value};
-use crate::config::Config;
-use super::blocks::markdown_to_notion_blocks;
+use crate::blocks::markdown_to_notion_blocks;
 
 const NOTION_API_VERSION: &str = "2022-06-28";
 const NOTION_API_BASE: &str = "https://api.notion.com/v1";
@@ -18,15 +17,11 @@ pub struct NotionClient {
 }
 
 impl NotionClient {
-    pub fn new(config: &Config) -> Result<Self> {
-        let token = config.notion.token.as_ref()
-            .ok_or_else(|| anyhow!("Notion token not configured. Please set it in ~/.polaris.toml"))?
-            .clone();
-
-        Ok(Self {
+    pub fn new(token: impl Into<String>) -> Self {
+        Self {
             client: Client::new(),
-            token,
-        })
+            token: token.into(),
+        }
     }
 
     pub async fn deploy(
