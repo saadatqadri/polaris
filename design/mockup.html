@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-mode="write">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polaris — Design Mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&display=swap" rel="stylesheet">
+<style>
+/* ---------- Fonts: fixed set, no configuration ---------- */
+@font-face {
+  font-family: "iA Writer Quattro";
+  src: url("https://cdn.jsdelivr.net/gh/iaolo/iA-Fonts@master/iA%20Writer%20Quattro/Webfonts/iAWriterQuattroS-Regular.woff2") format("woff2"),
+       url("https://cdn.jsdelivr.net/gh/iaolo/iA-Fonts@master/iA%20Writer%20Quattro%20S/Webfonts/iAWriterQuattroS-Regular.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "iA Writer Quattro";
+  src: url("https://cdn.jsdelivr.net/gh/iaolo/iA-Fonts@master/iA%20Writer%20Quattro/Webfonts/iAWriterQuattroS-Bold.woff2") format("woff2"),
+       url("https://cdn.jsdelivr.net/gh/iaolo/iA-Fonts@master/iA%20Writer%20Quattro%20S/Webfonts/iAWriterQuattroS-Bold.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "iA Writer Quattro";
+  src: url("https://cdn.jsdelivr.net/gh/iaolo/iA-Fonts@master/iA%20Writer%20Quattro/Webfonts/iAWriterQuattroS-Italic.woff2") format("woff2"),
+       url("https://cdn.jsdelivr.net/gh/iaolo/iA-Fonts@master/iA%20Writer%20Quattro%20S/Webfonts/iAWriterQuattroS-Italic.woff2") format("woff2");
+  font-weight: 400; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "iA Writer Mono";
+  src: url("https://cdn.jsdelivr.net/gh/iaolo/iA-Fonts@master/iA%20Writer%20Mono/Webfonts/iAWriterMonoS-Regular.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+
+/* ---------- Design tokens ---------- */
+:root {
+  --bg:        #FBFAF7;   /* warm paper */
+  --ink:       #24221D;   /* warm near-black */
+  --quiet:     #A9A498;   /* chrome, syntax marks */
+  --whisper:   #DEDAD1;   /* rules, borders */
+  --star:      #4E6E8E;   /* accent: north-star blue. cursor + selection only */
+  --star-soft: rgba(78, 110, 142, 0.18);
+  --measure:   62ch;
+  --serif:  "Literata", Georgia, serif;
+  --prose:  "iA Writer Quattro", "Iowan Old Style", Georgia, serif;
+  --mono:   "iA Writer Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+[data-theme="dark"] {
+  --bg:        #1A1916;
+  --ink:       #DAD6CC;
+  --quiet:     #635F54;
+  --whisper:   #33312B;
+  --star:      #8FAECB;
+  --star-soft: rgba(143, 174, 203, 0.22);
+}
+
+/* ---------- Base ---------- */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--prose);
+  font-size: 17.5px;
+  line-height: 1.62;
+  transition: background 0.35s ease, color 0.35s ease;
+}
+::selection { background: var(--star-soft); }
+
+/* ---------- Quiet chrome ---------- */
+.chrome {
+  position: fixed; left: 0; right: 0;
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 1.1rem 1.4rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: var(--quiet);
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+  user-select: none;
+}
+.chrome.top    { top: 0; }
+.chrome.bottom { bottom: 0; }
+body.typing .chrome { opacity: 0; }        /* chrome recedes while words arrive */
+.saved::before {
+  content: "●";
+  font-size: 0.55rem;
+  margin-right: 0.5em;
+  color: var(--star);
+  opacity: 0.55;
+}
+
+/* ---------- The page ---------- */
+main {
+  min-height: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 16vh 1.5rem 30vh;   /* generous head margin; deep foot so the cursor never touches bottom */
+}
+#editor, #preview {
+  width: 100%;
+  max-width: var(--measure);
+  outline: none;
+  caret-color: var(--star);
+}
+
+/* Writing mode: markdown stays visible, but quiet */
+#editor h1, #editor h2, #editor h3 {
+  font-size: 1em; font-weight: 700;
+  margin: 1.6em 0 0.4em;
+}
+#editor h1 { font-size: 1.22em; }
+#editor h2 { font-size: 1.08em; }
+#editor p, #editor li { margin: 0 0 1em; }
+#editor blockquote {
+  margin: 1.2em 0; padding-left: 1.2em;
+  border-left: 2px solid var(--whisper);
+  color: color-mix(in srgb, var(--ink) 78%, var(--quiet));
+  font-style: italic;
+}
+#editor ul { padding-left: 1.4em; }
+#editor .mk {                    /* markdown syntax marks: #, **, >, - */
+  color: var(--quiet);
+  font-weight: 400;
+  font-style: normal;
+}
+#editor strong .mk, #editor em .mk { font-weight: 400; }
+#editor code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  background: color-mix(in srgb, var(--whisper) 45%, transparent);
+  padding: 0.05em 0.3em; border-radius: 3px;
+}
+
+/* Preview mode: the reading face */
+#preview { display: none; font-family: var(--serif); font-size: 1.04em; }
+#preview h1 { font-size: 1.6em;  font-weight: 600; line-height: 1.25; margin: 0 0 0.8em; }
+#preview h2 { font-size: 1.25em; font-weight: 600; margin: 1.6em 0 0.5em; }
+#preview p, #preview li { margin: 0 0 1em; }
+#preview blockquote {
+  margin: 1.4em 0; padding-left: 1.2em;
+  border-left: 2px solid var(--whisper);
+  font-style: italic;
+}
+#preview ul { padding-left: 1.4em; }
+[data-mode="preview"] #editor  { display: none; }
+[data-mode="preview"] #preview { display: block; }
+
+/* ---------- Corner controls (mock-only affordance) ---------- */
+.controls {
+  position: fixed; bottom: 1.05rem; left: 1.4rem;
+  display: flex; gap: 1.1em;
+  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em;
+  transition: opacity 0.6s ease;
+}
+body.typing .controls { opacity: 0; }
+.controls button {
+  all: unset; cursor: pointer; color: var(--quiet);
+  border-bottom: 1px solid transparent; padding-bottom: 1px;
+}
+.controls button:hover { color: var(--ink); }
+.controls button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--star); }
+</style>
+</head>
+<body>
+
+<header class="chrome top">
+  <span>morning-pages.md</span>
+  <span class="saved">saved</span>
+</header>
+
+<main>
+  <!-- WRITING MODE · iA Writer Quattro · markdown visible but quiet -->
+  <div id="editor" contenteditable="true" spellcheck="false">
+    <h1><span class="mk"># </span>The Shape of a Morning</h1>
+    <p>There is a particular silence before the first sentence — the kind that asks to be broken slowly, by hand.</p>
+    <p>Polaris begins there. No panels, no palettes, no assistant hovering at your elbow. Just a warm page, one good typeface, and a cursor keeping time. The words that land here are <em><span class="mk">*</span>yours<span class="mk">*</span></em> — typed, reconsidered, typed again. That friction is the point. It is what thinking feels like.</p>
+    <h2><span class="mk">## </span>What stays out of the way</h2>
+    <ul>
+      <li><span class="mk">- </span>The chrome fades while you type, and returns when you rest</li>
+      <li><span class="mk">- </span>Your words are saved as they land — no dialogs, no anxiety</li>
+      <li><span class="mk">- </span>Markdown stays visible, but <strong><span class="mk">**</span>quiet<span class="mk">**</span></strong></li>
+    </ul>
+    <blockquote><span class="mk">&gt; </span>Write with the door closed, rewrite with the door open.</blockquote>
+    <p>The tools should hold still so the writing can move. When you want the machine’s opinion, you will ask for it — and not a moment before.</p>
+  </div>
+
+  <!-- PREVIEW MODE · Literata · the reading face -->
+  <article id="preview">
+    <h1>The Shape of a Morning</h1>
+    <p>There is a particular silence before the first sentence — the kind that asks to be broken slowly, by hand.</p>
+    <p>Polaris begins there. No panels, no palettes, no assistant hovering at your elbow. Just a warm page, one good typeface, and a cursor keeping time. The words that land here are <em>yours</em> — typed, reconsidered, typed again. That friction is the point. It is what thinking feels like.</p>
+    <h2>What stays out of the way</h2>
+    <ul>
+      <li>The chrome fades while you type, and returns when you rest</li>
+      <li>Your words are saved as they land — no dialogs, no anxiety</li>
+      <li>Markdown stays visible, but <strong>quiet</strong></li>
+    </ul>
+    <blockquote>Write with the door closed, rewrite with the door open.</blockquote>
+    <p>The tools should hold still so the writing can move. When you want the machine’s opinion, you will ask for it — and not a moment before.</p>
+  </article>
+</main>
+
+<footer class="chrome bottom">
+  <span></span>
+  <span id="count">0 words</span>
+</footer>
+
+<div class="controls">
+  <button id="btn-write"   aria-pressed="true">write</button>
+  <button id="btn-preview" aria-pressed="false">preview</button>
+  <button id="btn-theme"   aria-pressed="false">dark</button>
+</div>
+
+<script>
+const root    = document.documentElement;
+const editor  = document.getElementById('editor');
+const count   = document.getElementById('count');
+const bWrite  = document.getElementById('btn-write');
+const bPrev   = document.getElementById('btn-preview');
+const bTheme  = document.getElementById('btn-theme');
+
+/* ---- live word count ---- */
+function updateCount() {
+  const words = editor.innerText.trim().split(/\s+/).filter(Boolean).length;
+  count.textContent = words + " words · " + Math.max(1, Math.round(words / 220)) + " min";
+}
+updateCount();
+
+/* ---- chrome fades while typing, returns on rest ---- */
+let fadeTimer;
+editor.addEventListener('input', () => {
+  document.body.classList.add('typing');
+  clearTimeout(fadeTimer);
+  fadeTimer = setTimeout(() => document.body.classList.remove('typing'), 1200);
+  updateCount();
+});
+
+/* ---- smart typography as you type: quotes, em dash, ellipsis ---- */
+editor.addEventListener('beforeinput', (e) => {
+  if (e.inputType !== 'insertText' || !e.data || e.data.length !== 1) return;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return;
+  const node = sel.anchorNode;
+  const off  = sel.anchorOffset;
+  const prev = node.nodeType === 3 && off > 0 ? node.textContent[off - 1] : "";
+  const prev2 = node.nodeType === 3 && off > 1 ? node.textContent[off - 2] : "";
+  const opens = !prev || /[\s(\[{—–\-]/.test(prev);
+
+  const insert = (text, back = 0) => {
+    e.preventDefault();
+    for (let i = 0; i < back; i++) sel.modify('extend', 'backward', 'character');
+    document.execCommand('insertText', false, text);
+  };
+
+  if (e.data === '"')  return insert(opens ? '“' : '”');
+  if (e.data === "'")  return insert(opens ? '‘' : '’');
+  if (e.data === '-' && prev === '-')              return insert('—', 1); // -- → —
+  if (e.data === '.' && prev === '.' && prev2 === '.') return insert('…', 2); // ... → …
+});
+
+/* ---- mode + theme (mock affordances; real app uses Ctrl+P / fixed themes) ---- */
+function setMode(m) {
+  root.dataset.mode = m;
+  bWrite.setAttribute('aria-pressed', m === 'write');
+  bPrev.setAttribute('aria-pressed', m === 'preview');
+}
+bWrite.addEventListener('click', () => setMode('write'));
+bPrev .addEventListener('click', () => setMode('preview'));
+bTheme.addEventListener('click', () => {
+  const dark = root.dataset.theme !== 'dark';
+  root.dataset.theme = dark ? 'dark' : 'light';
+  bTheme.textContent = dark ? 'light' : 'dark';
+});
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+    e.preventDefault();
+    setMode(root.dataset.mode === 'write' ? 'preview' : 'write');
+  }
+});
+</script>
+</body>
+</html>
