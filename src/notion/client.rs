@@ -53,37 +53,63 @@ impl NotionClient {
     }
 
     async fn clear_page_blocks(&self, page_id: &str) -> Result<()> {
-        // Get all blocks in the page
+        // Collect all block IDs first — the children endpoint paginates at 100
         let url = format!("{}/blocks/{}/children", NOTION_API_BASE, page_id);
+        let mut block_ids: Vec<String> = Vec::new();
+        let mut start_cursor: Option<String> = None;
 
-        let response = self.client
-            .get(&url)
-            .header("Authorization", format!("Bearer {}", self.token))
-            .header("Notion-Version", NOTION_API_VERSION)
-            .send()
-            .await
-            .context("Failed to get page blocks")?;
+        loop {
+            let mut request = self.client
+                .get(&url)
+                .header("Authorization", format!("Bearer {}", self.token))
+                .header("Notion-Version", NOTION_API_VERSION)
+                .query(&[("page_size", "100")]);
 
-        if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(anyhow!("Failed to get page blocks: {}", error_text));
+            if let Some(ref cursor) = start_cursor {
+                request = request.query(&[("start_cursor", cursor.as_str())]);
+            }
+
+            let response = request.send().await
+                .context("Failed to get page blocks")?;
+
+            if !response.status().is_success() {
+                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                return Err(anyhow!("Failed to get page blocks: {}", error_text));
+            }
+
+            let data: Value = response.json().await
+                .context("Failed to parse response")?;
+
+            if let Some(blocks) = data["results"].as_array() {
+                block_ids.extend(
+                    blocks.iter().filter_map(|b| b["id"].as_str().map(String::from))
+                );
+            }
+
+            start_cursor = if data["has_more"].as_bool().unwrap_or(false) {
+                data["next_cursor"].as_str().map(String::from)
+            } else {
+                None
+            };
+
+            if start_cursor.is_none() {
+                break;
+            }
         }
 
-        let data: Value = response.json().await
-            .context("Failed to parse response")?;
+        for block_id in block_ids {
+            let delete_url = format!("{}/blocks/{}", NOTION_API_BASE, block_id);
+            let response = self.client
+                .delete(&delete_url)
+                .header("Authorization", format!("Bearer {}", self.token))
+                .header("Notion-Version", NOTION_API_VERSION)
+                .send()
+                .await
+                .with_context(|| format!("Failed to delete block {}", block_id))?;
 
-        // Delete each block
-        if let Some(blocks) = data["results"].as_array() {
-            for block in blocks {
-                if let Some(block_id) = block["id"].as_str() {
-                    let delete_url = format!("{}/blocks/{}", NOTION_API_BASE, block_id);
-                    let _ = self.client
-                        .delete(&delete_url)
-                        .header("Authorization", format!("Bearer {}", self.token))
-                        .header("Notion-Version", NOTION_API_VERSION)
-                        .send()
-                        .await;
-                }
+            if !response.status().is_success() {
+                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                return Err(anyhow!("Failed to delete block {}: {}", block_id, error_text));
             }
         }
 

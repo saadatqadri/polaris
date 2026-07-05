@@ -29,6 +29,7 @@ pub struct Editor {
     pub should_deploy: bool,
     pub message: Option<String>,
     pub save_as_input: String,
+    quit_pending: bool,
 }
 
 impl Editor {
@@ -40,6 +41,7 @@ impl Editor {
             should_deploy: false,
             message: None,
             save_as_input: String::new(),
+            quit_pending: false,
         }
     }
 
@@ -96,12 +98,20 @@ impl Editor {
     }
 
     fn handle_normal_mode(&mut self, key: KeyEvent) -> Result<()> {
+        let is_quit_key = matches!(
+            (key.code, key.modifiers),
+            (KeyCode::Char('q'), KeyModifiers::CONTROL)
+        );
+        if !is_quit_key {
+            self.quit_pending = false;
+        }
+
         match (key.code, key.modifiers) {
             // Ctrl+Q to quit
             (KeyCode::Char('q'), KeyModifiers::CONTROL) => {
-                if self.buffer.dirty {
-                    self.message = Some("Unsaved changes! Press Ctrl+Q again to force quit, or Ctrl+S to save.".to_string());
-                    // Simple force quit on second attempt - in production you'd track this
+                if self.buffer.dirty && !self.quit_pending {
+                    self.quit_pending = true;
+                    self.message = Some("Unsaved changes! Press Ctrl+Q again to quit without saving, or Ctrl+S to save.".to_string());
                 } else {
                     self.should_quit = true;
                 }
@@ -119,9 +129,16 @@ impl Editor {
                     self.message = Some("Enter filename:".to_string());
                 }
             }
-            // Ctrl+D to deploy
+            // Ctrl+D to deploy (saves first so the deployed content is current)
             (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
-                self.should_deploy = true;
+                if self.buffer.file_path.is_none() {
+                    self.message = Some("Save the file before deploying (Ctrl+S).".to_string());
+                } else {
+                    match self.buffer.save() {
+                        Ok(_) => self.should_deploy = true,
+                        Err(e) => self.message = Some(format!("Error saving before deploy: {}", e)),
+                    }
+                }
             }
             // Ctrl+P to toggle preview
             (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
@@ -165,7 +182,10 @@ impl Editor {
 
     fn handle_preview_mode(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
-            KeyCode::Esc | KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Esc => {
+                self.mode = EditorMode::Normal;
+            }
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.mode = EditorMode::Normal;
             }
             KeyCode::Up => {
@@ -174,7 +194,9 @@ impl Editor {
                 }
             }
             KeyCode::Down => {
-                self.buffer.scroll_offset += 1;
+                if self.buffer.scroll_offset + 1 < self.buffer.lines.len() {
+                    self.buffer.scroll_offset += 1;
+                }
             }
             _ => {}
         }
@@ -237,7 +259,10 @@ impl Editor {
         if self.buffer.cursor_y < self.buffer.scroll_offset {
             self.buffer.scroll_offset = self.buffer.cursor_y;
         } else if self.buffer.cursor_y >= self.buffer.scroll_offset + visible_height {
-            self.buffer.scroll_offset = self.buffer.cursor_y.saturating_sub(visible_height - 1);
+            self.buffer.scroll_offset = self
+                .buffer
+                .cursor_y
+                .saturating_sub(visible_height.saturating_sub(1));
         }
 
         let visible_lines: Vec<Line> = self.buffer.lines
@@ -253,9 +278,9 @@ impl Editor {
         frame.render_widget(paragraph, area);
 
         // Calculate cursor position accounting for borders and scroll
-        let cursor_x = (area.x + 1 + self.buffer.cursor_x as u16).min(area.width - 2);
+        let cursor_x = (area.x + 1 + self.buffer.cursor_x as u16).min(area.width.saturating_sub(2));
         let cursor_y = (area.y + 1 + (self.buffer.cursor_y - self.buffer.scroll_offset) as u16)
-            .min(area.height - 2);
+            .min(area.height.saturating_sub(2));
 
         frame.set_cursor(cursor_x, cursor_y);
     }

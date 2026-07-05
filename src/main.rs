@@ -19,14 +19,18 @@ async fn main() -> Result<()> {
     match cli.command {
         Some(Commands::New { filename }) => {
             let path = PathBuf::from(&filename);
-            // Create empty file
+            if path.exists() {
+                anyhow::bail!(
+                    "File already exists: {}. Open it with 'polaris {}'",
+                    filename,
+                    filename
+                );
+            }
             fs::write(&path, "").context("Failed to create file")?;
             println!("Created: {}", filename);
 
-            // Open in editor
             let buffer = TextBuffer::from_file(path)?;
-            let mut editor = Editor::new(buffer);
-            editor.run()?;
+            run_editor(buffer).await?;
         }
 
         Some(Commands::Deploy { file, page, mode }) => {
@@ -48,31 +52,28 @@ async fn main() -> Result<()> {
                     TextBuffer::from_file(file)?
                 };
 
-                let mut editor = Editor::new(buffer);
-                editor.run()?;
-
-                // If user pressed Ctrl+D, deploy
-                if editor.should_deploy {
-                    if let Some(ref path) = editor.buffer.file_path {
-                        let config = Config::load()?;
-                        let page_id = config.notion.default_page
-                            .ok_or_else(|| anyhow::anyhow!("No default Notion page configured. Use 'polaris config --default-page <PAGE_ID>'"))?;
-
-                        deploy_file(path.clone(), Some(page_id), "replace").await?;
-                    }
-                }
+                run_editor(buffer).await?;
             } else {
                 // No file specified, create a new untitled buffer
-                let buffer = TextBuffer::new();
-                let mut editor = Editor::new(buffer);
-                editor.run()?;
-
-                // Prompt to save if there's content
-                if editor.buffer.dirty {
-                    println!("\nFile not saved. Use Ctrl+S in the editor or save with a filename.");
-                }
+                run_editor(TextBuffer::new()).await?;
             }
         }
+    }
+
+    Ok(())
+}
+
+async fn run_editor(buffer: TextBuffer) -> Result<()> {
+    let mut editor = Editor::new(buffer);
+    editor.run()?;
+
+    // If user pressed Ctrl+D, deploy (the editor saves the buffer before setting this)
+    if editor.should_deploy {
+        if let Some(ref path) = editor.buffer.file_path {
+            deploy_file(path.clone(), None, "append").await?;
+        }
+    } else if editor.buffer.dirty && editor.buffer.file_path.is_none() {
+        println!("\nFile not saved. Use Ctrl+S in the editor or save with a filename.");
     }
 
     Ok(())

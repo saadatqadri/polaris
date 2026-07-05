@@ -32,8 +32,8 @@ this file is only the condensed handover summary.
 - **Decided:** pivot from TUI to a **GUI using `iced`** so typography can be
   owned by the product (terminal can't control fonts). Keyboard-driven and
   local-first are unchanged. Design phase complete and approved-in-principle.
-- **No tests exist yet.** No CI. `Cargo.lock` is currently gitignored — consider
-  committing it (recommended for binaries) as part of the next infra touch.
+- **30 unit tests** (TUI buffer semantics incl. Unicode editing; markdown →
+  Notion blocks converter). No CI yet — lands in M1. `Cargo.lock` is committed.
 
 ## Roadmap
 
@@ -60,13 +60,12 @@ this file is only the condensed handover summary.
 
 ## Known bugs / debt in existing code
 
-- `src/editor/buffer.rs` — `insert_char`/`backspace` index by **bytes**, so any
-  non-ASCII input (é, curly quotes, em-dash) panics. Fixed properly by M1's
-  rope rewrite; don't band-aid it.
 - No word wrap, no undo — the TUI is not prose-usable; that's why Phase 1 exists.
-- `src/notion/client.rs` — `clear_page_blocks` fetches only the first page of
-  blocks (no pagination cursor) and `create_page` is dead code.
-- Bold/italic markdown maps to plain text in Notion blocks (annotations TODO).
+- `src/notion/client.rs` — `create_page` is dead code (wire up or remove in M5).
+- Bold/italic markdown maps to plain text in Notion blocks (annotations TODO, M5).
+- Fixed 2026-07-05 (see PLAN §2): byte-index Unicode panics, `polaris new`
+  clobbering, quit-confirm, deploy-of-stale-copy, `clear_page_blocks`
+  pagination, ordered lists, paragraph-after-heading merging.
 
 ## Open questions for the user
 
