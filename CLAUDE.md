@@ -53,8 +53,9 @@ this file is only the condensed handover summary.
     `text_editor` is the interaction layer; every edit syncs into
     `polaris-core::Document` as a char-diff (`Document::replace_range`), so
     core owns undo grouping. Custom cosmic-text widget deferred to Phase 2.
-    Owner is lukewarm on the Quattro typeface — swap = `gui/fonts.rs` +
-    `assets/fonts/`, nothing else.
+    Typeface decided 2026-07-05 after an audition: **Instrument Sans** for
+    writing mode (true italics vendored); Mono stays for chrome, Literata
+    still planned for preview (M4).
   - **M3 — landed 2026-07-05, pending owner's hands-on check:** silent
     debounced autosave (1s, Cmd+S forces + opens save-as when untitled),
     `● saved` chrome, Cmd+F find (chrome bar, Enter/Shift+Enter cycle, Esc
