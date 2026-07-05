@@ -10,9 +10,15 @@ pub const SANS_SEMIBOLD_BYTES: &[u8] =
     include_bytes!("../../assets/fonts/InstrumentSans-SemiBold.ttf");
 pub const MONO_REGULAR_BYTES: &[u8] =
     include_bytes!("../../assets/fonts/iAWriterMonoS-Regular.ttf");
+pub const READING_REGULAR_BYTES: &[u8] = include_bytes!("../../assets/fonts/Literata-Regular.ttf");
+pub const READING_ITALIC_BYTES: &[u8] = include_bytes!("../../assets/fonts/Literata-Italic.ttf");
+pub const READING_SEMIBOLD_BYTES: &[u8] =
+    include_bytes!("../../assets/fonts/Literata-SemiBold.ttf");
 
 /// Writing mode (decision 2026-07-05: Instrument Sans, replacing iA Writer
 /// Quattro).
 pub const WRITING: Font = Font::with_name("Instrument Sans");
 /// Chrome (status line), code, source-literal contexts.
 pub const MONO: Font = Font::with_name("iA Writer Mono S");
+/// Preview / reading mode.
+pub const READING: Font = Font::with_name("Literata");

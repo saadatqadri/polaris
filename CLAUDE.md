@@ -66,9 +66,16 @@ this file is only the condensed handover summary.
     cover is physical typing into the window. NOTE: `main` must stay
     synchronous — iced (tokio feature) panics inside `#[tokio::main]`;
     async commands get their own runtime in `run_command`.
-  - **M4:** fading chrome (0.6s fade, 1.2s return), live word count, smart
-    punctuation on input (`"`→“”, `--`→—, `...`→…), light/dark themes
-    following the OS.
+  - **M4 — landed 2026-07-05, pending owner's hands-on check:** chrome fade
+    (0.6s out on keystroke, back after 1.2s rest; always visible in
+    overlays/preview), word count + reading time, smart punctuation applied
+    at input (core transforms; skipped inside code fences/spans via a
+    backtick-parity heuristic; one backspace right after a substitution
+    restores the literal keystrokes), Cmd/Ctrl+P preview in Literata
+    (pulldown-cmark → iced rich text: headings, lists, quotes, code blocks,
+    rules; caret-relative scroll on entry; Esc/Cmd+P exits). Known gap vs
+    the mock: markdown source marks are NOT yet styled quiet in write mode —
+    needs the Phase 2 custom widget/highlighter.
   - **M5:** rewire Notion deploy + CLI to the new front-end; keep
     `polaris deploy` headless.
 - **Phase 2:** focus mode, Hemingway mode (backspace disabled), zen mode,

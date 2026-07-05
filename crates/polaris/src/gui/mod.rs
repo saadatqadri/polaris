@@ -8,6 +8,7 @@
 //! The custom cosmic-text widget replaces this shim in Phase 2.
 
 mod fonts;
+mod preview;
 mod theme;
 
 use std::ops::Range;
@@ -15,16 +16,22 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use iced::widget::text_editor;
-use iced::widget::text_editor::{Binding, Content, KeyPress};
-use iced::widget::{column, container, row, space, text, text_input};
+use iced::widget::text_editor::{Binding, Content, Edit, KeyPress};
+use iced::widget::{column, container, row, scrollable, space, text, text_input};
 use iced::{
     event, keyboard, Background, Border, Element, Fill, Padding, Subscription, Task, Theme,
 };
 
 use polaris_core::buffer::Buffer;
-use polaris_core::{AutosaveTimer, Document};
+use polaris_core::{typography, AutosaveTimer, Document};
 
 const CHROME_INPUT_ID: &str = "chrome-input";
+const PREVIEW_SCROLL_ID: &str = "preview-scroll";
+
+/// DESIGN.md chrome fade: 0.6s out on keystroke, back 1.2s after rest.
+const FADE_OUT_SECS: f32 = 0.6;
+const FADE_IN_SECS: f32 = 0.3;
+const FADE_REST_MS: u64 = 1200;
 
 pub fn run(path: Option<PathBuf>) -> iced::Result {
     iced::application(move || App::boot(path.clone()), App::update, App::view)
@@ -35,6 +42,9 @@ pub fn run(path: Option<PathBuf>) -> iced::Result {
         .font(fonts::SANS_ITALIC_BYTES)
         .font(fonts::SANS_SEMIBOLD_BYTES)
         .font(fonts::MONO_REGULAR_BYTES)
+        .font(fonts::READING_REGULAR_BYTES)
+        .font(fonts::READING_ITALIC_BYTES)
+        .font(fonts::READING_SEMIBOLD_BYTES)
         .default_font(fonts::WRITING)
         .window_size(iced::Size::new(760.0, 940.0))
         .run()
@@ -45,6 +55,22 @@ enum Overlay {
     None,
     Find,
     SaveAs,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ViewMode {
+    Write,
+    Preview,
+}
+
+/// One backspace right after a smart-punctuation substitution restores the
+/// literal keystrokes.
+#[derive(Debug, Clone)]
+struct Revert {
+    /// Chars the substitution inserted (to delete).
+    inserted: usize,
+    /// The literal text the writer actually typed (to restore).
+    literal: String,
 }
 
 struct App {
@@ -60,6 +86,11 @@ struct App {
     current_match: usize,
     epoch: Instant,
     autosave: AutosaveTimer,
+    view_mode: ViewMode,
+    /// Chrome opacity: fades toward 0 while typing, back to 1 at rest.
+    chrome_alpha: f32,
+    last_key_ms: Option<u64>,
+    pending_revert: Option<Revert>,
 }
 
 #[derive(Debug, Clone)]
@@ -69,6 +100,8 @@ enum Message {
     Undo,
     Redo,
     AutosaveTick,
+    FadeTick,
+    TogglePreview,
     FindOpen,
     OverlayInput(String),
     OverlaySubmit { backwards: bool },
@@ -101,6 +134,10 @@ impl App {
             current_match: 0,
             epoch: Instant::now(),
             autosave: AutosaveTimer::default(),
+            view_mode: ViewMode::Write,
+            chrome_alpha: 1.0,
+            last_key_ms: None,
+            pending_revert: None,
         };
         // The widget normalizes to a trailing newline; rebase the model once
         // so subsequent diffs line up.
@@ -129,6 +166,16 @@ impl App {
         if self.overlay != Overlay::None {
             subs.push(event::listen_with(overlay_key_events));
         }
+        if self.view_mode == ViewMode::Preview {
+            subs.push(event::listen_with(preview_key_events));
+        }
+        // Fade animation ticks: while typing recently or not yet fully back.
+        let recently_typed = self
+            .last_key_ms
+            .is_some_and(|t| self.now_ms().saturating_sub(t) < FADE_REST_MS + 100);
+        if self.chrome_alpha < 1.0 || recently_typed {
+            subs.push(iced::time::every(Duration::from_millis(40)).map(|_| Message::FadeTick));
+        }
         Subscription::batch(subs)
     }
 
@@ -149,9 +196,10 @@ impl App {
         match message {
             Message::Edit(action) => {
                 let is_edit = action.is_edit();
-                self.content.perform(action);
+                self.perform_with_typography(action);
                 if is_edit {
                     self.status = None;
+                    self.last_key_ms = Some(self.now_ms());
                     let new_text = self.content.text();
                     if new_text != self.last_text {
                         apply_diff(&mut self.doc, &self.last_text, &new_text);
@@ -164,6 +212,49 @@ impl App {
                 }
                 Task::none()
             }
+            Message::FadeTick => {
+                let now = self.now_ms();
+                let target = if self.overlay != Overlay::None || self.view_mode == ViewMode::Preview
+                {
+                    1.0
+                } else if self
+                    .last_key_ms
+                    .is_some_and(|t| now.saturating_sub(t) < FADE_REST_MS)
+                {
+                    0.0
+                } else {
+                    1.0
+                };
+                let dt = 0.040_f32;
+                if target < self.chrome_alpha {
+                    self.chrome_alpha = (self.chrome_alpha - dt / FADE_OUT_SECS).max(0.0);
+                } else if target > self.chrome_alpha {
+                    self.chrome_alpha = (self.chrome_alpha + dt / FADE_IN_SECS).min(1.0);
+                }
+                Task::none()
+            }
+            Message::TogglePreview => match self.view_mode {
+                ViewMode::Write => {
+                    self.view_mode = ViewMode::Preview;
+                    self.chrome_alpha = 1.0;
+                    // Approximate scroll preservation: land at the caret's
+                    // relative position in the document.
+                    let caret = char_index_of(self.doc.buffer(), self.content.cursor().position);
+                    let line = self.doc.buffer().char_to_line(caret) as f32;
+                    let total = self.doc.buffer().len_lines().max(2) as f32;
+                    iced::widget::operation::snap_to(
+                        PREVIEW_SCROLL_ID,
+                        scrollable::RelativeOffset {
+                            x: 0.0,
+                            y: (line / (total - 1.0)).clamp(0.0, 1.0),
+                        },
+                    )
+                }
+                ViewMode::Preview => {
+                    self.view_mode = ViewMode::Write;
+                    iced::widget::operation::focus_next()
+                }
+            },
             Message::Save => {
                 if self.doc.path().is_none() {
                     self.open_overlay(Overlay::SaveAs)
@@ -291,6 +382,65 @@ impl App {
         }
     }
 
+    /// Perform an editor action, applying smart punctuation to plain char
+    /// inserts (DESIGN.md: applied at input time so the file carries the real
+    /// characters). Never inside code spans/fences; one backspace right after
+    /// a substitution restores the literal keystrokes.
+    fn perform_with_typography(&mut self, action: text_editor::Action) {
+        match &action {
+            text_editor::Action::Edit(Edit::Insert(c)) if self.content.selection().is_none() => {
+                let caret = char_index_of(self.doc.buffer(), self.content.cursor().position);
+                let before = self.doc.buffer().slice(0..caret);
+                if !in_code_context(&before) {
+                    if let Some(sub) = typography::substitute(&before, *c) {
+                        let mut literal: String = before
+                            .chars()
+                            .rev()
+                            .take(sub.delete_before)
+                            .collect::<Vec<_>>()
+                            .into_iter()
+                            .rev()
+                            .collect();
+                        literal.push(*c);
+                        for _ in 0..sub.delete_before {
+                            self.content
+                                .perform(text_editor::Action::Edit(Edit::Backspace));
+                        }
+                        for ch in sub.insert.chars() {
+                            self.content
+                                .perform(text_editor::Action::Edit(Edit::Insert(ch)));
+                        }
+                        self.pending_revert = Some(Revert {
+                            inserted: sub.insert.chars().count(),
+                            literal,
+                        });
+                        return;
+                    }
+                }
+                self.pending_revert = None;
+                self.content.perform(action);
+            }
+            text_editor::Action::Edit(Edit::Backspace) => {
+                if let Some(revert) = self.pending_revert.take() {
+                    for _ in 0..revert.inserted {
+                        self.content
+                            .perform(text_editor::Action::Edit(Edit::Backspace));
+                    }
+                    for ch in revert.literal.chars() {
+                        self.content
+                            .perform(text_editor::Action::Edit(Edit::Insert(ch)));
+                    }
+                    return;
+                }
+                self.content.perform(action);
+            }
+            _ => {
+                self.pending_revert = None;
+                self.content.perform(action);
+            }
+        }
+    }
+
     /// Rebuild widget content from the model (after undo/redo).
     fn sync_from_doc(&mut self) {
         self.content = Content::with_text(&self.doc.text());
@@ -307,21 +457,35 @@ impl App {
 
     fn view(&self) -> Element<'_, Message> {
         let t = theme::tokens(self.dark);
-        let quiet_text = |s: String| text(s).font(fonts::MONO).size(13).color(t.quiet);
+        let chrome_color = iced::Color {
+            a: t.quiet.a * self.chrome_alpha,
+            ..t.quiet
+        };
+        let quiet_text = |s: String| text(s).font(fonts::MONO).size(13).color(chrome_color);
 
         let chrome: Element<'_, Message> = match self.overlay {
             Overlay::None => {
+                let words = self.doc.word_count();
                 let right = match &self.status {
                     Some(status) => status.clone(),
-                    None => format!(
-                        "{} words{}",
-                        self.doc.word_count(),
-                        if self.doc.is_dirty() {
-                            ""
-                        } else {
-                            "  ·  ● saved"
-                        }
-                    ),
+                    None => {
+                        let reading = format!(" · {} min", (words as f32 / 220.0).ceil().max(1.0));
+                        format!(
+                            "{} words{}{}{}",
+                            words,
+                            if words > 0 { &reading } else { "" },
+                            if self.view_mode == ViewMode::Preview {
+                                " · preview"
+                            } else {
+                                ""
+                            },
+                            if self.doc.is_dirty() {
+                                ""
+                            } else {
+                                " · ● saved"
+                            }
+                        )
+                    }
                 };
                 row![
                     quiet_text(self.filename()),
@@ -354,31 +518,46 @@ impl App {
             .into(),
         };
 
-        let editor = text_editor(&self.content)
-            .on_action(Message::Edit)
-            .key_binding(key_binding)
-            .font(fonts::WRITING)
-            .size(17.5)
-            .line_height(text::LineHeight::Relative(1.62))
+        let body: Element<'_, Message> = match self.view_mode {
+            ViewMode::Write => text_editor(&self.content)
+                .on_action(Message::Edit)
+                .key_binding(key_binding)
+                .font(fonts::WRITING)
+                .size(17.5)
+                .line_height(text::LineHeight::Relative(1.62))
+                .height(Fill)
+                .padding(Padding {
+                    top: 4.0,
+                    right: 2.0,
+                    // Breathing room so the caret never writes at the window
+                    // edge (typewriter scrolling proper lands in Phase 2).
+                    bottom: 220.0,
+                    left: 2.0,
+                })
+                .style(move |_theme, _status| text_editor::Style {
+                    background: Background::Color(t.bg),
+                    border: Border::default(),
+                    placeholder: t.quiet,
+                    value: t.ink,
+                    selection: iced::Color { a: 0.35, ..t.star },
+                })
+                .into(),
+            ViewMode::Preview => scrollable(container(preview::view(&self.last_text, t)).padding(
+                Padding {
+                    top: 4.0,
+                    right: 2.0,
+                    bottom: 220.0,
+                    left: 2.0,
+                },
+            ))
+            .id(PREVIEW_SCROLL_ID)
             .height(Fill)
-            .padding(Padding {
-                top: 4.0,
-                right: 2.0,
-                // Breathing room so the caret never writes at the window edge
-                // (typewriter scrolling proper lands in Phase 2).
-                bottom: 220.0,
-                left: 2.0,
-            })
-            .style(move |_theme, _status| text_editor::Style {
-                background: Background::Color(t.bg),
-                border: Border::default(),
-                placeholder: t.quiet,
-                value: t.ink,
-                selection: iced::Color { a: 0.35, ..t.star },
-            });
+            .width(Fill)
+            .into(),
+        };
 
-        // ~62ch of Quattro at 17.5px
-        let page = container(column![chrome, editor].spacing(26))
+        // ~62ch at 17.5px
+        let page = container(column![chrome, body].spacing(26))
             .max_width(600)
             .height(Fill);
 
@@ -425,6 +604,7 @@ fn key_binding(key_press: KeyPress) -> Option<Binding<Message>> {
             match c {
                 "s" => return Some(Binding::Custom(Message::Save)),
                 "f" => return Some(Binding::Custom(Message::FindOpen)),
+                "p" => return Some(Binding::Custom(Message::TogglePreview)),
                 "z" if modifiers.shift() => return Some(Binding::Custom(Message::Redo)),
                 "z" => return Some(Binding::Custom(Message::Undo)),
                 _ => {}
@@ -452,6 +632,40 @@ fn overlay_key_events(
     } else {
         None
     }
+}
+
+/// Cmd/Ctrl+P or Esc leaves preview; Cmd/Ctrl+S still saves. Subscribed only
+/// while previewing (the editor and its bindings aren't mounted then).
+fn preview_key_events(
+    event: iced::Event,
+    _status: event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event {
+        match key.as_ref() {
+            keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::TogglePreview),
+            keyboard::Key::Character("p") if modifiers.command() => Some(Message::TogglePreview),
+            keyboard::Key::Character("s") if modifiers.command() => Some(Message::Save),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
+/// Markdown context guard for smart punctuation: inside a fenced code block
+/// (odd number of ``` fence lines so far) or an inline code span (odd number
+/// of backticks on the current line).
+fn in_code_context(before: &str) -> bool {
+    let fences = before
+        .lines()
+        .filter(|l| l.trim_start().starts_with("```"))
+        .count();
+    if fences % 2 == 1 {
+        return true;
+    }
+    let line = before.rsplit('\n').next().unwrap_or(before);
+    line.chars().filter(|&c| c == '`').count() % 2 == 1
 }
 
 fn detect_dark() -> bool {
@@ -517,7 +731,7 @@ fn apply_diff(doc: &mut Document, old: &str, new: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_diff, char_index_of, position_of, App, Message, Overlay};
+    use super::{apply_diff, char_index_of, position_of, App, Message, Overlay, ViewMode};
     use iced::widget::text_editor::{Action, Edit};
     use polaris_core::Document;
 
@@ -580,6 +794,83 @@ mod tests {
             .unwrap()
             .starts_with("draft one"));
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn smart_punctuation_applies_on_input() {
+        let (mut app, _) = App::boot(None);
+        type_into(&mut app, "wait -- \"really\" it's...");
+        assert_eq!(
+            app.doc.text().trim_end(),
+            "wait \u{2014} \u{201C}really\u{201D} it\u{2019}s\u{2026}"
+        );
+    }
+
+    #[test]
+    fn smart_punctuation_skipped_in_code_contexts() {
+        let (mut app, _) = App::boot(None);
+        type_into(
+            &mut app,
+            "```\n--verbose \"flag\"\n```\nand `--inline \"x\"` here",
+        );
+        let text = app.doc.text();
+        assert!(text.contains("--verbose \"flag\""), "fence stays literal");
+        assert!(
+            text.contains("`--inline \"x\"`"),
+            "inline span stays literal"
+        );
+    }
+
+    #[test]
+    fn backspace_right_after_substitution_reverts_to_literal() {
+        let (mut app, _) = App::boot(None);
+        type_into(&mut app, "a--");
+        assert!(app.doc.text().starts_with("a\u{2014}"));
+        let _ = app.update(Message::Edit(Action::Edit(Edit::Backspace)));
+        assert!(app.doc.text().starts_with("a--"), "literal restored");
+        // A second backspace is a plain backspace again.
+        let _ = app.update(Message::Edit(Action::Edit(Edit::Backspace)));
+        assert!(app.doc.text().starts_with("a-"));
+    }
+
+    #[test]
+    fn markdown_rule_stays_typeable() {
+        let (mut app, _) = App::boot(None);
+        type_into(&mut app, "text\n\n---");
+        assert!(
+            app.doc.text().contains("\n---"),
+            "hr not turned into a dash"
+        );
+    }
+
+    #[test]
+    fn preview_toggles_and_chrome_returns() {
+        let (mut app, _) = App::boot(None);
+        type_into(&mut app, "# Title\n\nsome *styled* text");
+        assert_eq!(app.view_mode, ViewMode::Write);
+        let _ = app.update(Message::TogglePreview);
+        assert_eq!(app.view_mode, ViewMode::Preview);
+        // Fade target is 1.0 in preview even right after typing.
+        app.chrome_alpha = 0.2;
+        let _ = app.update(Message::FadeTick);
+        assert!(app.chrome_alpha > 0.2);
+        let _ = app.update(Message::TogglePreview);
+        assert_eq!(app.view_mode, ViewMode::Write);
+    }
+
+    #[test]
+    fn typing_fades_chrome_and_rest_restores_it() {
+        let (mut app, _) = App::boot(None);
+        type_into(&mut app, "x");
+        for _ in 0..30 {
+            let _ = app.update(Message::FadeTick);
+        }
+        assert_eq!(app.chrome_alpha, 0.0, "faded out while typing recently");
+        std::thread::sleep(std::time::Duration::from_millis(1250));
+        for _ in 0..30 {
+            let _ = app.update(Message::FadeTick);
+        }
+        assert_eq!(app.chrome_alpha, 1.0, "returned after rest");
     }
 
     #[test]
