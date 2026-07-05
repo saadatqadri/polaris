@@ -190,15 +190,11 @@ impl Editor {
             KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.mode = EditorMode::Normal;
             }
-            KeyCode::Up => {
-                if self.buffer.scroll_offset > 0 {
-                    self.buffer.scroll_offset -= 1;
-                }
+            KeyCode::Up if self.buffer.scroll_offset > 0 => {
+                self.buffer.scroll_offset -= 1;
             }
-            KeyCode::Down => {
-                if self.buffer.scroll_offset + 1 < self.buffer.lines.len() {
-                    self.buffer.scroll_offset += 1;
-                }
+            KeyCode::Down if self.buffer.scroll_offset + 1 < self.buffer.lines.len() => {
+                self.buffer.scroll_offset += 1;
             }
             _ => {}
         }
