@@ -206,23 +206,23 @@ cargo build --release
 
 ## Roadmap
 
-### MVP (Current)
-- [x] Terminal text editor
-- [x] Markdown support
-- [x] File operations (new, open, save)
-- [x] Notion deployment
-- [x] Preview mode
-- [x] CLI interface
+The full project plan lives in [`docs/PLAN.md`](docs/PLAN.md); the design
+system in [`design/DESIGN.md`](design/DESIGN.md) with a typeable mock at
+[`design/mockup.html`](design/mockup.html).
 
-### Post-MVP
-- [ ] Two-way sync with Notion
-- [ ] Templates
-- [ ] Git integration
-- [ ] AI-assisted writing
-- [ ] Multiple export formats (PDF, HTML)
-- [ ] Syntax highlighting in editor
-- [ ] Search and replace
-- [ ] Multiple file tabs
+- [x] **MVP** — terminal editor, markdown preview, file operations, Notion deploy, CLI
+- [ ] **Phase 1** — GUI (iced) with fixed typography (iA Writer Quattro / Mono,
+  Literata), rope buffer + undo, soft wrap, silent autosave, find, fading
+  chrome, smart punctuation
+- [ ] **Phase 2** — focus mode, Hemingway mode, zen mode, typewriter scrolling,
+  session goals
+- [ ] **Phase 3** — writer-friendly version control: named draft snapshots and
+  word-level diffs, backed by invisible git
+- [ ] **Phase 4** — accept/reject editing workflow; more publish targets
+  (HTML/PDF, gist, webhook)
+
+**A note on AI:** Polaris will never generate, autocomplete, or ghost-write
+text. Every word in a Polaris document is typed by a person.
 
 ## Philosophy
 

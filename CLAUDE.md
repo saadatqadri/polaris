@@ -19,6 +19,9 @@ with one-command deployment to Notion. Rust throughout.
 The design source of truth is **`design/DESIGN.md`** (tokens, type rules,
 interaction specs, keyboard map) and **`design/mockup.html`** (interactive,
 typeable mock — open in a browser). Match the mock exactly when building UI.
+The **full project plan** — vision, GUI refactor architecture, milestone
+acceptance criteria, engineering conventions, risks — is **`docs/PLAN.md`**;
+this file is only the condensed handover summary.
 
 ## Current state (2026-07-05)
 
