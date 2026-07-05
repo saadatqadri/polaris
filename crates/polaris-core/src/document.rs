@@ -122,26 +122,40 @@ impl Document {
             return;
         }
         if let Some(sel) = self.cursor.selection() {
-            // Replacing a selection is its own undo group.
+            // Replacing a selection is one atomic undo group.
             self.history.commit();
             self.remove_range(sel);
-        } else if self.insert_starts_new_group(text) {
-            self.history.commit();
+            self.insert_at_cursor(text, true);
+        } else {
+            self.insert_at_cursor(text, false);
         }
+    }
 
-        let cursor_before = self.cursor.pos;
-        let at = self.cursor.pos;
-        self.buffer.insert(at, text);
-        let new_pos = at + text.chars().count();
-        self.history.record(
-            EditOp::Insert {
-                at,
-                text: text.to_string(),
-            },
-            cursor_before,
-            new_pos,
-        );
-        self.set_cursor_after_edit(new_pos);
+    /// Apply an edit at an explicit char range, with the same undo grouping
+    /// as typed input. For front-ends whose interaction layer owns the caret
+    /// (e.g. the M2 `text_editor` shim) and sync edits into the model.
+    pub fn replace_range(&mut self, range: Range<usize>, text: &str) {
+        let len = self.buffer.len_chars();
+        let start = range.start.min(len);
+        let end = range.end.clamp(start, len);
+        if start == end && text.is_empty() {
+            return;
+        }
+        self.cursor.anchor = None;
+        let removed = start < end;
+        if removed {
+            let range = start..end;
+            if self.remove_starts_new_group(&range) {
+                self.history.commit();
+            }
+            self.remove_range(range);
+        } else {
+            self.cursor.pos = start;
+        }
+        if !text.is_empty() {
+            // A remove+insert from one call is one atomic replacement.
+            self.insert_at_cursor(text, removed);
+        }
     }
 
     pub fn insert_newline(&mut self) {
@@ -334,6 +348,25 @@ impl Document {
             sticky_col: None,
         };
         self.dirty = true;
+    }
+
+    fn insert_at_cursor(&mut self, text: &str, join_open_group: bool) {
+        if !join_open_group && self.insert_starts_new_group(text) {
+            self.history.commit();
+        }
+        let cursor_before = self.cursor.pos;
+        let at = self.cursor.pos;
+        self.buffer.insert(at, text);
+        let new_pos = at + text.chars().count();
+        self.history.record(
+            EditOp::Insert {
+                at,
+                text: text.to_string(),
+            },
+            cursor_before,
+            new_pos,
+        );
+        self.set_cursor_after_edit(new_pos);
     }
 
     fn remove_range(&mut self, range: Range<usize>) {

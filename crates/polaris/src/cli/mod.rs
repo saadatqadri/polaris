@@ -14,6 +14,12 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Open a file in the GUI editor (Phase 1; becomes the default at M5)
+    Gui {
+        /// File to open (created if missing)
+        file: Option<PathBuf>,
+    },
+
     /// Create a new markdown file
     New {
         /// Name of the file to create

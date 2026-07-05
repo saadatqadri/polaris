@@ -1,6 +1,7 @@
 mod cli;
 mod config;
 mod editor;
+mod gui;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -16,6 +17,16 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Some(Commands::Gui { file }) => {
+            if let Some(ref f) = file {
+                if f.exists() {
+                    // Validate readability up front; the GUI boot can't return errors.
+                    fs::read_to_string(f).with_context(|| format!("Cannot read file: {:?}", f))?;
+                }
+            }
+            gui::run(file).map_err(|e| anyhow::anyhow!("GUI failed: {e}"))?;
+        }
+
         Some(Commands::New { filename }) => {
             let path = PathBuf::from(&filename);
             if path.exists() {

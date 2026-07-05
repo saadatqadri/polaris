@@ -46,8 +46,15 @@ this file is only the condensed handover summary.
   - **M1 — DONE (2026-07-05):** workspace split; `polaris-core` with rope
     buffer, grapheme cursors, grouped undo/redo, autosave policy, word count,
     typography transforms; CI.
-  - **M2 (next):** iced window, embedded fonts (`include_bytes!`), 62ch centered
-    column, soft word wrap, basic editing.
+  - **M2 — landed 2026-07-05, pending owner's hands-on check:** iced 0.14
+    window (`polaris gui <file>`), embedded Quattro/Mono via `include_bytes!`,
+    62ch centered column, soft wrap, both themes (OS-detected at startup),
+    save + undo/redo through core. Spike outcome (PLAN §7 #3): iced
+    `text_editor` is the interaction layer; every edit syncs into
+    `polaris-core::Document` as a char-diff (`Document::replace_range`), so
+    core owns undo grouping. Custom cosmic-text widget deferred to Phase 2.
+    Owner is lukewarm on the Quattro typeface — swap = `gui/fonts.rs` +
+    `assets/fonts/`, nothing else.
   - **M3:** silent debounced autosave, find (Ctrl+F), word-jump, in-window
     save-as prompt.
   - **M4:** fading chrome (0.6s fade, 1.2s return), live word count, smart

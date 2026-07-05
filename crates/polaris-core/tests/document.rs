@@ -198,6 +198,52 @@ fn undo_restores_cursor() {
     assert_eq!(doc.text(), "hello ");
 }
 
+// --- replace_range (front-end sync shim path) ---
+
+#[test]
+fn replace_range_typing_simulation_groups_into_words() {
+    // A text_editor-style front-end feeds one replace_range per keystroke.
+    let mut doc = Document::new();
+    for (i, c) in "hello world".chars().enumerate() {
+        doc.replace_range(i..i, &c.to_string());
+    }
+    assert_eq!(doc.text(), "hello world");
+    doc.undo();
+    assert_eq!(doc.text(), "hello "); // word-sized undo, same as insert_char
+    doc.undo();
+    assert_eq!(doc.text(), "");
+}
+
+#[test]
+fn replace_range_replaces_and_deletes() {
+    let mut doc = Document::from_str("hello world");
+    doc.replace_range(0..5, "goodbye");
+    assert_eq!(doc.text(), "goodbye world");
+    doc.replace_range(7..13, "");
+    assert_eq!(doc.text(), "goodbye");
+    doc.undo();
+    assert_eq!(doc.text(), "goodbye world");
+}
+
+#[test]
+fn replace_range_backspace_simulation_groups() {
+    let mut doc = Document::from_str("abc");
+    doc.replace_range(2..3, "");
+    doc.replace_range(1..2, "");
+    assert_eq!(doc.text(), "a");
+    doc.undo();
+    assert_eq!(doc.text(), "abc"); // contiguous deletes undo together
+}
+
+#[test]
+fn replace_range_clamps_out_of_bounds() {
+    let mut doc = Document::from_str("ab");
+    doc.replace_range(1..99, "x");
+    assert_eq!(doc.text(), "ax");
+    doc.replace_range(50..60, "!");
+    assert_eq!(doc.text(), "ax!");
+}
+
 // --- word count ---
 
 #[test]

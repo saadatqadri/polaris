@@ -13,6 +13,8 @@ polaris-notion = { path = "../polaris-notion" }
 
 anyhow.workspace = true
 serde.workspace = true
+iced = "0.14"
+dark-light = "2"
 ratatui = "0.26"
 crossterm = "0.27"
 pulldown-cmark = "0.11"
