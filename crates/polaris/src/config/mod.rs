@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Config {
     #[serde(default)]
     pub notion: NotionConfig,
@@ -26,8 +26,8 @@ impl Config {
         let contents = fs::read_to_string(&config_path)
             .with_context(|| format!("Failed to read config file: {:?}", config_path))?;
 
-        let config: Config = toml::from_str(&contents)
-            .with_context(|| "Failed to parse config file")?;
+        let config: Config =
+            toml::from_str(&contents).with_context(|| "Failed to parse config file")?;
 
         Ok(config)
     }
@@ -36,12 +36,11 @@ impl Config {
         let config_path = Self::config_path()?;
 
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| "Failed to create config directory")?;
+            fs::create_dir_all(parent).with_context(|| "Failed to create config directory")?;
         }
 
-        let contents = toml::to_string_pretty(self)
-            .with_context(|| "Failed to serialize config")?;
+        let contents =
+            toml::to_string_pretty(self).with_context(|| "Failed to serialize config")?;
 
         fs::write(&config_path, contents)
             .with_context(|| format!("Failed to write config file: {:?}", config_path))?;
@@ -50,16 +49,7 @@ impl Config {
     }
 
     fn config_path() -> Result<PathBuf> {
-        let home = dirs::home_dir()
-            .with_context(|| "Failed to get home directory")?;
+        let home = dirs::home_dir().with_context(|| "Failed to get home directory")?;
         Ok(home.join(".polaris.toml"))
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            notion: NotionConfig::default(),
-        }
     }
 }

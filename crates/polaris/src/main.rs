@@ -36,7 +36,10 @@ async fn main() -> Result<()> {
             deploy_file(file, page, &mode).await?;
         }
 
-        Some(Commands::Config { token, default_page }) => {
+        Some(Commands::Config {
+            token,
+            default_page,
+        }) => {
             configure(token, default_page)?;
         }
 
@@ -81,11 +84,16 @@ async fn run_editor(buffer: TextBuffer) -> Result<()> {
 async fn deploy_file(file: PathBuf, page_id: Option<String>, mode_str: &str) -> Result<()> {
     let config = Config::load()?;
 
-    let page_id = page_id.or_else(|| config.notion.default_page.clone())
-        .ok_or_else(|| anyhow::anyhow!("No Notion page ID specified. Use --page or configure default in ~/.polaris.toml"))?;
+    let page_id = page_id
+        .or_else(|| config.notion.default_page.clone())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No Notion page ID specified. Use --page or configure default in ~/.polaris.toml"
+            )
+        })?;
 
-    let markdown = fs::read_to_string(&file)
-        .with_context(|| format!("Failed to read file: {:?}", file))?;
+    let markdown =
+        fs::read_to_string(&file).with_context(|| format!("Failed to read file: {:?}", file))?;
 
     let mode = match mode_str {
         "replace" => PublishMode::Replace,

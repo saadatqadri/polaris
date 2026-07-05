@@ -111,19 +111,25 @@ pub fn markdown_to_notion_blocks(markdown: &str) -> Vec<Value> {
                 if in_code_block {
                     code_block_content.push_str(&text);
                 } else if !current_list_items.is_empty() {
-                    push_to_last_list_item(&mut current_list_items, json!({
-                        "type": "text",
-                        "text": {
-                            "content": text.to_string()
-                        }
-                    }));
+                    push_to_last_list_item(
+                        &mut current_list_items,
+                        json!({
+                            "type": "text",
+                            "text": {
+                                "content": text.to_string()
+                            }
+                        }),
+                    );
                 } else if in_heading || in_quote {
-                    push_to_last_block(&mut blocks, json!({
-                        "type": "text",
-                        "text": {
-                            "content": text.to_string()
-                        }
-                    }));
+                    push_to_last_block(
+                        &mut blocks,
+                        json!({
+                            "type": "text",
+                            "text": {
+                                "content": text.to_string()
+                            }
+                        }),
+                    );
                 } else {
                     current_paragraph.push(json!({
                         "type": "text",
@@ -221,7 +227,10 @@ fn push_to_last_block(blocks: &mut [Value], rich_text_item: Value) {
 
 fn push_to_last_list_item(list_items: &mut [Value], rich_text_item: Value) {
     if let Some(item) = list_items.last_mut() {
-        let item_type = item["type"].as_str().unwrap_or("bulleted_list_item").to_string();
+        let item_type = item["type"]
+            .as_str()
+            .unwrap_or("bulleted_list_item")
+            .to_string();
         if let Some(rich_text) = item[&item_type]["rich_text"].as_array_mut() {
             rich_text.push(rich_text_item);
         }
@@ -251,7 +260,10 @@ mod tests {
     fn headings_map_to_levels() {
         let blocks = markdown_to_notion_blocks("# One\n\n## Two\n\n### Three\n\n#### Four");
         let types: Vec<&str> = blocks.iter().map(|b| b["type"].as_str().unwrap()).collect();
-        assert_eq!(types, vec!["heading_1", "heading_2", "heading_3", "heading_3"]);
+        assert_eq!(
+            types,
+            vec!["heading_1", "heading_2", "heading_3", "heading_3"]
+        );
         assert_eq!(text_of(&blocks[0]), "One");
         assert_eq!(text_of(&blocks[1]), "Two");
     }
@@ -305,7 +317,9 @@ mod tests {
     fn inline_code_in_list_item() {
         let blocks = markdown_to_notion_blocks("- run `cargo test` now");
         assert_eq!(blocks.len(), 1);
-        let rich_text = blocks[0]["bulleted_list_item"]["rich_text"].as_array().unwrap();
+        let rich_text = blocks[0]["bulleted_list_item"]["rich_text"]
+            .as_array()
+            .unwrap();
         assert_eq!(rich_text.len(), 3);
         assert_eq!(rich_text[1]["text"]["content"], "cargo test");
         assert_eq!(rich_text[1]["annotations"]["code"], true);
@@ -383,7 +397,10 @@ mod tests {
         let markdown = "# Title\n\nIntro paragraph.\n\n- item\n\n```sh\necho hi\n```\n";
         let blocks = markdown_to_notion_blocks(markdown);
         let types: Vec<&str> = blocks.iter().map(|b| b["type"].as_str().unwrap()).collect();
-        assert_eq!(types, vec!["heading_1", "paragraph", "bulleted_list_item", "code"]);
+        assert_eq!(
+            types,
+            vec!["heading_1", "paragraph", "bulleted_list_item", "code"]
+        );
     }
 
     #[test]

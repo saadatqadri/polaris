@@ -1,7 +1,9 @@
 use crate::editor::buffer::TextBuffer;
 use anyhow::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -237,10 +239,7 @@ impl Editor {
     fn render(&mut self, frame: &mut Frame) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(1),
-                Constraint::Length(3),
-            ])
+            .constraints([Constraint::Min(1), Constraint::Length(3)])
             .split(frame.size());
 
         match self.mode {
@@ -265,7 +264,9 @@ impl Editor {
                 .saturating_sub(visible_height.saturating_sub(1));
         }
 
-        let visible_lines: Vec<Line> = self.buffer.lines
+        let visible_lines: Vec<Line> = self
+            .buffer
+            .lines
             .iter()
             .skip(self.buffer.scroll_offset)
             .take(visible_height)
@@ -286,7 +287,7 @@ impl Editor {
     }
 
     fn render_preview(&self, frame: &mut Frame, area: Rect) {
-        use pulldown_cmark::{Parser, html};
+        use pulldown_cmark::{html, Parser};
 
         let markdown_content = self.buffer.get_content();
         let parser = Parser::new(&markdown_content);
@@ -303,9 +304,19 @@ impl Editor {
             .take(visible_height)
             .map(|line| {
                 if line.starts_with("# ") {
-                    Line::from(Span::styled(line, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)))
+                    Line::from(Span::styled(
+                        line,
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ))
                 } else if line.starts_with("## ") {
-                    Line::from(Span::styled(line, Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)))
+                    Line::from(Span::styled(
+                        line,
+                        Style::default()
+                            .fg(Color::Blue)
+                            .add_modifier(Modifier::BOLD),
+                    ))
                 } else if line.starts_with("```") {
                     Line::from(Span::styled(line, Style::default().fg(Color::Green)))
                 } else {
@@ -315,7 +326,11 @@ impl Editor {
             .collect();
 
         let paragraph = Paragraph::new(lines)
-            .block(Block::default().borders(Borders::ALL).title("Preview (Ctrl+P to exit)"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Preview (Ctrl+P to exit)"),
+            )
             .wrap(Wrap { trim: false });
 
         frame.render_widget(paragraph, area);
@@ -335,7 +350,10 @@ impl Editor {
         let status_text = if let Some(ref msg) = self.message {
             msg.clone()
         } else {
-            format!("{}{} | {} | {}", filename, dirty_indicator, position, mode_text)
+            format!(
+                "{}{} | {} | {}",
+                filename, dirty_indicator, position, mode_text
+            )
         };
 
         let status = Paragraph::new(status_text)
@@ -345,8 +363,7 @@ impl Editor {
         frame.render_widget(status, area);
 
         let help_text = "Ctrl+S: Save | Ctrl+Q: Quit | Ctrl+D: Deploy | Ctrl+P: Preview";
-        let help = Paragraph::new(help_text)
-            .style(Style::default().fg(Color::Gray));
+        let help = Paragraph::new(help_text).style(Style::default().fg(Color::Gray));
 
         let help_area = Rect {
             x: area.x + 1,

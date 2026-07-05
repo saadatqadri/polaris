@@ -23,26 +23,30 @@ The **full project plan** — vision, GUI refactor architecture, milestone
 acceptance criteria, engineering conventions, risks — is **`docs/PLAN.md`**;
 this file is only the condensed handover summary.
 
-## Current state (2026-07-05)
+## Current state (2026-07-05, M1 complete)
 
-- **Done (MVP, ~1,200 lines):** terminal (ratatui) editor with basic editing,
-  save/save-as, markdown preview, `~/.polaris.toml` config, Notion deploy
-  (markdown → Notion blocks via pulldown-cmark), clap CLI
-  (`new` / `deploy` / `config`). Builds clean on stable; a few dead-code warnings.
+- **Done (MVP):** terminal (ratatui) editor with basic editing, save/save-as,
+  markdown preview, `~/.polaris.toml` config, Notion deploy (markdown → Notion
+  blocks via pulldown-cmark), clap CLI (`new` / `deploy` / `config`).
 - **Decided:** pivot from TUI to a **GUI using `iced`** so typography can be
   owned by the product (terminal can't control fonts). Keyboard-driven and
   local-first are unchanged. Design phase complete and approved-in-principle.
-- **30 unit tests** (TUI buffer semantics incl. Unicode editing; markdown →
-  Notion blocks converter). No CI yet — lands in M1. `Cargo.lock` is committed.
+- **M1 done:** Cargo workspace (`crates/polaris-core`, `crates/polaris-notion`,
+  `crates/polaris`). `polaris-core` has the ropey buffer, grapheme-aware
+  cursor/selection/word-jump (unicode-segmentation), grouped undo/redo,
+  file binding + autosave debounce policy, word count, and the
+  smart-punctuation transforms (with markdown-`---` escape). 74 tests across
+  the workspace; GitHub Actions CI (fmt, clippy -D warnings, test on
+  Linux+macOS); `Cargo.lock` committed. The TUI still uses its own (fixed)
+  buffer — it is frozen and dies at M5, so it was not rewired to core.
 
 ## Roadmap
 
-- **Phase 1 (next):** editor fundamentals + iced GUI shell. Milestones:
-  - **M1 — `polaris-core` crate (START HERE):** extract buffer logic out of the
-    binary into a UI-agnostic library crate. Replace `Vec<String>` buffer with
-    a rope (`ropey`), grapheme-aware cursors (`unicode-segmentation`),
-    undo/redo stack, unit tests.
-  - **M2:** iced window, embedded fonts (`include_bytes!`), 62ch centered
+- **Phase 1 (current):** editor fundamentals + iced GUI shell. Milestones:
+  - **M1 — DONE (2026-07-05):** workspace split; `polaris-core` with rope
+    buffer, grapheme cursors, grouped undo/redo, autosave policy, word count,
+    typography transforms; CI.
+  - **M2 (next):** iced window, embedded fonts (`include_bytes!`), 62ch centered
     column, soft word wrap, basic editing.
   - **M3:** silent debounced autosave, find (Ctrl+F), word-jump, in-window
     save-as prompt.
@@ -79,7 +83,6 @@ this file is only the condensed handover summary.
   practices (PRs, CI, branch protection) planned later. The old branch
   `claude/polaris-markdown-editor-01TR1jZmXhHzE8XujUPiBbSR` is merged-equal to
   main and can be deleted.
-- Build: `cargo build` · Run: `cargo run -- <file.md>` · No test suite yet —
-  add one starting with `polaris-core` in M1.
-- When restructuring for M1, move to a workspace: `polaris-core` (lib) +
-  `polaris` (bin) so the core stays UI-agnostic.
+- Build: `cargo build` · Run: `cargo run -- <file.md>` · Test:
+  `cargo test --workspace` · Lint like CI: `cargo fmt --all --check &&
+  cargo clippy --workspace --all-targets -- -D warnings`.

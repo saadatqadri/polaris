@@ -1,6 +1,6 @@
+use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
-use anyhow::{Context, Result};
 
 #[derive(Debug, Clone)]
 pub struct TextBuffer {
@@ -180,12 +180,13 @@ impl TextBuffer {
     }
 
     pub fn save(&mut self) -> Result<()> {
-        let path = self.file_path.as_ref()
+        let path = self
+            .file_path
+            .as_ref()
             .with_context(|| "No file path set")?;
 
         let contents = self.lines.join("\n");
-        fs::write(path, contents)
-            .with_context(|| format!("Failed to write file: {:?}", path))?;
+        fs::write(path, contents).with_context(|| format!("Failed to write file: {:?}", path))?;
 
         self.dirty = false;
         Ok(())

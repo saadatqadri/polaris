@@ -1,7 +1,7 @@
-use anyhow::{Context, Result, anyhow};
+use crate::blocks::markdown_to_notion_blocks;
+use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde_json::{json, Value};
-use crate::blocks::markdown_to_notion_blocks;
 
 const NOTION_API_VERSION: &str = "2022-06-28";
 const NOTION_API_BASE: &str = "https://api.notion.com/v1";
@@ -24,12 +24,7 @@ impl NotionClient {
         }
     }
 
-    pub async fn deploy(
-        &self,
-        markdown: &str,
-        page_id: &str,
-        mode: PublishMode,
-    ) -> Result<String> {
+    pub async fn deploy(&self, markdown: &str, page_id: &str, mode: PublishMode) -> Result<String> {
         let blocks = markdown_to_notion_blocks(markdown);
 
         match mode {
@@ -54,7 +49,8 @@ impl NotionClient {
         let mut start_cursor: Option<String> = None;
 
         loop {
-            let mut request = self.client
+            let mut request = self
+                .client
                 .get(&url)
                 .header("Authorization", format!("Bearer {}", self.token))
                 .header("Notion-Version", NOTION_API_VERSION)
@@ -64,20 +60,23 @@ impl NotionClient {
                 request = request.query(&[("start_cursor", cursor.as_str())]);
             }
 
-            let response = request.send().await
-                .context("Failed to get page blocks")?;
+            let response = request.send().await.context("Failed to get page blocks")?;
 
             if !response.status().is_success() {
-                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_text = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
                 return Err(anyhow!("Failed to get page blocks: {}", error_text));
             }
 
-            let data: Value = response.json().await
-                .context("Failed to parse response")?;
+            let data: Value = response.json().await.context("Failed to parse response")?;
 
             if let Some(blocks) = data["results"].as_array() {
                 block_ids.extend(
-                    blocks.iter().filter_map(|b| b["id"].as_str().map(String::from))
+                    blocks
+                        .iter()
+                        .filter_map(|b| b["id"].as_str().map(String::from)),
                 );
             }
 
@@ -94,7 +93,8 @@ impl NotionClient {
 
         for block_id in block_ids {
             let delete_url = format!("{}/blocks/{}", NOTION_API_BASE, block_id);
-            let response = self.client
+            let response = self
+                .client
                 .delete(&delete_url)
                 .header("Authorization", format!("Bearer {}", self.token))
                 .header("Notion-Version", NOTION_API_VERSION)
@@ -103,8 +103,15 @@ impl NotionClient {
                 .with_context(|| format!("Failed to delete block {}", block_id))?;
 
             if !response.status().is_success() {
-                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-                return Err(anyhow!("Failed to delete block {}: {}", block_id, error_text));
+                let error_text = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
+                return Err(anyhow!(
+                    "Failed to delete block {}: {}",
+                    block_id,
+                    error_text
+                ));
             }
         }
 
@@ -124,7 +131,8 @@ impl NotionClient {
                 "children": chunk
             });
 
-            let response = self.client
+            let response = self
+                .client
                 .patch(&url)
                 .header("Authorization", format!("Bearer {}", self.token))
                 .header("Notion-Version", NOTION_API_VERSION)
@@ -135,7 +143,10 @@ impl NotionClient {
                 .context("Failed to append blocks")?;
 
             if !response.status().is_success() {
-                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_text = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
                 return Err(anyhow!("Failed to append blocks: {}", error_text));
             }
         }
@@ -143,7 +154,12 @@ impl NotionClient {
         Ok(())
     }
 
-    pub async fn create_page(&self, parent_page_id: &str, title: &str, blocks: Vec<Value>) -> Result<String> {
+    pub async fn create_page(
+        &self,
+        parent_page_id: &str,
+        title: &str,
+        blocks: Vec<Value>,
+    ) -> Result<String> {
         let url = format!("{}/pages", NOTION_API_BASE);
 
         let body = json!({
@@ -163,7 +179,8 @@ impl NotionClient {
             "children": blocks
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.token))
             .header("Notion-Version", NOTION_API_VERSION)
@@ -174,14 +191,17 @@ impl NotionClient {
             .context("Failed to create page")?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(anyhow!("Failed to create page: {}", error_text));
         }
 
-        let data: Value = response.json().await
-            .context("Failed to parse response")?;
+        let data: Value = response.json().await.context("Failed to parse response")?;
 
-        let page_id = data["id"].as_str()
+        let page_id = data["id"]
+            .as_str()
             .ok_or_else(|| anyhow!("No page ID in response"))?;
 
         Ok(format!("https://notion.so/{}", page_id.replace("-", "")))
