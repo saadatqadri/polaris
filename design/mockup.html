@@ -6,10 +6,10 @@
 <title>Polaris — Design Mock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Instrument+Sans:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Newsreader:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 /* ---------- Fonts: fixed set, no configuration ---------- */
-/* Writing face decided 2026-07-05: Instrument Sans (was iA Writer Quattro) */
+/* Writing face decided 2026-07-05: Newsreader (2026-07-06; was Instrument Sans, orig. Quattro) */
 @font-face {
   font-family: "iA Writer Mono";
   src: url("https://cdn.jsdelivr.net/gh/iaolo/iA-Fonts@master/iA%20Writer%20Mono/Webfonts/iAWriterMonoS-Regular.woff2") format("woff2");
@@ -26,7 +26,7 @@
   --star-soft: rgba(78, 110, 142, 0.18);
   --measure:   62ch;
   --serif:  "Literata", Georgia, serif;
-  --prose:  "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --prose:  "Newsreader", "Iowan Old Style", Georgia, serif;
   --mono:   "iA Writer Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 [data-theme="dark"] {
@@ -46,8 +46,8 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--prose);
-  font-size: 17.5px;
-  line-height: 1.62;
+  font-size: 19px;
+  line-height: 1.56;
   transition: background 0.35s ease, color 0.35s ease;
 }
 ::selection { background: var(--star-soft); }
@@ -156,7 +156,7 @@ body.typing .controls { opacity: 0; }
 </header>
 
 <main>
-  <!-- WRITING MODE · Instrument Sans · markdown visible but quiet -->
+  <!-- WRITING MODE · Newsreader · markdown visible but quiet -->
   <div id="editor" contenteditable="true" spellcheck="false">
     <h1><span class="mk"># </span>The Shape of a Morning</h1>
     <p>There is a particular silence before the first sentence — the kind that asks to be broken slowly, by hand.</p>

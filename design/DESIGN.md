@@ -23,7 +23,7 @@ open it in a browser, type in it, toggle the theme and preview.
 
 | Face | License | Role |
 |------|---------|------|
-| **Instrument Sans** | SIL OFL | Writing mode. A warm modern grotesque — clean without being cold. (Decided 2026-07-05, replacing iA Writer Quattro after the typeface audition.) |
+| **Newsreader (16pt optical size)** | SIL OFL | Writing mode. Editorial serif with the finest italic of the audition. (Revised 2026-07-06 after daylight use; previously Instrument Sans, originally iA Writer Quattro.) |
 | **iA Writer Mono** | SIL OFL | Chrome (status line), code blocks, source-literal contexts. |
 | **Literata** | SIL OFL | Preview / reading mode. |
 
@@ -44,7 +44,8 @@ Two themes, both fixed. Theme follows the OS by default; one toggle, no editor.
 ## Layout & type
 
 - Measure: **62ch** max-width, centered. Text never spans the window.
-- Body: Instrument Sans 17.5px / **1.62** line-height.
+- Body: Newsreader 19px / **1.56** line-height (Newsreader runs optically
+  small; 19px matches the old 17.5px sans).
 - Top margin ~16vh; bottom padding ~30vh so the cursor never writes at the
   screen's edge (typewriter scrolling lands in Phase 2).
 - Headings stay calm: same family, bold, H1 ≈ 1.22em — headings organize,

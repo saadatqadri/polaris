@@ -38,9 +38,9 @@ pub fn run(path: Option<PathBuf>) -> iced::Result {
         .title(App::title)
         .theme(App::theme)
         .subscription(App::subscription)
-        .font(fonts::SANS_REGULAR_BYTES)
-        .font(fonts::SANS_ITALIC_BYTES)
-        .font(fonts::SANS_SEMIBOLD_BYTES)
+        .font(fonts::WRITING_REGULAR_BYTES)
+        .font(fonts::WRITING_ITALIC_BYTES)
+        .font(fonts::WRITING_SEMIBOLD_BYTES)
         .font(fonts::MONO_REGULAR_BYTES)
         .font(fonts::READING_REGULAR_BYTES)
         .font(fonts::READING_ITALIC_BYTES)
@@ -622,8 +622,10 @@ impl App {
                 .on_action(Message::Edit)
                 .key_binding(key_binding)
                 .font(fonts::WRITING)
-                .size(17.5)
-                .line_height(text::LineHeight::Relative(1.62))
+                // Newsreader runs optically small: 19px here ≈ the old
+                // 17.5px of Instrument Sans (audition-tuned).
+                .size(19)
+                .line_height(text::LineHeight::Relative(1.56))
                 .height(Fill)
                 .padding(Padding {
                     top: 4.0,

@@ -236,7 +236,7 @@ linear history, repo-inside-repo handling).
 | 2 | Body size | 17.5px (current) vs. 18–19px | **Decided 2026-07-05: 17.5px**, revisit in the real GUI |
 | 3 | Editor widget | Custom cosmic-text widget vs. iced `text_editor` + highlighter | **Decided in M2: start on `text_editor`**, with `polaris-core` as the document model synced via a char-diff shim; custom widget lands with Phase 2 (typewriter scrolling / focus dimming need it) |
 | 4 | Window chrome | Native decorations (current plan) vs. frameless | Defer until after M4 |
-| 5 | Writing typeface | Quattro vs Lora / Newsreader / Alegreya / Instrument Sans (audition page, 2026-07-05) | **Decided 2026-07-05: Instrument Sans** (true italics vendored). Still bundled-only, no user setting |
+| 5 | Writing typeface | Quattro vs Lora / Newsreader / Alegreya / Instrument Sans (audition page, 2026-07-05) | **Decided: Newsreader, 16pt optical size** (2026-07-06, revising the Instrument Sans pick after daylight use). Still bundled-only, no user setting |
 
 ## 8. Risks
 

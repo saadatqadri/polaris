@@ -3,11 +3,12 @@
 
 use iced::Font;
 
-pub const SANS_REGULAR_BYTES: &[u8] =
-    include_bytes!("../../assets/fonts/InstrumentSans-Regular.ttf");
-pub const SANS_ITALIC_BYTES: &[u8] = include_bytes!("../../assets/fonts/InstrumentSans-Italic.ttf");
-pub const SANS_SEMIBOLD_BYTES: &[u8] =
-    include_bytes!("../../assets/fonts/InstrumentSans-SemiBold.ttf");
+pub const WRITING_REGULAR_BYTES: &[u8] =
+    include_bytes!("../../assets/fonts/Newsreader16pt-Regular.ttf");
+pub const WRITING_ITALIC_BYTES: &[u8] =
+    include_bytes!("../../assets/fonts/Newsreader16pt-Italic.ttf");
+pub const WRITING_SEMIBOLD_BYTES: &[u8] =
+    include_bytes!("../../assets/fonts/Newsreader16pt-SemiBold.ttf");
 pub const MONO_REGULAR_BYTES: &[u8] =
     include_bytes!("../../assets/fonts/iAWriterMonoS-Regular.ttf");
 pub const READING_REGULAR_BYTES: &[u8] = include_bytes!("../../assets/fonts/Literata-Regular.ttf");
@@ -15,9 +16,9 @@ pub const READING_ITALIC_BYTES: &[u8] = include_bytes!("../../assets/fonts/Liter
 pub const READING_SEMIBOLD_BYTES: &[u8] =
     include_bytes!("../../assets/fonts/Literata-SemiBold.ttf");
 
-/// Writing mode (decision 2026-07-05: Instrument Sans, replacing iA Writer
-/// Quattro).
-pub const WRITING: Font = Font::with_name("Instrument Sans");
+/// Writing mode (decision 2026-07-06: Newsreader, 16pt optical size —
+/// revising the Instrument Sans pick after daylight use).
+pub const WRITING: Font = Font::with_name("Newsreader 16pt");
 /// Chrome (status line), code, source-literal contexts.
 pub const MONO: Font = Font::with_name("iA Writer Mono S");
 /// Preview / reading mode.

@@ -183,7 +183,7 @@ polaris/
 │   │                     # grapheme cursors, undo/redo, typography
 │   ├── polaris-notion/   # markdown → Notion blocks + API client
 │   └── polaris/          # the binary: iced GUI + clap CLI
-│       ├── assets/fonts/ # embedded faces (Instrument Sans, iA Writer
+│       ├── assets/fonts/ # embedded faces (Newsreader, iA Writer
 │       │                 # Mono, Literata — all SIL OFL)
 │       └── src/gui/      # window, editor, preview, theme, chrome
 ├── design/               # DESIGN.md + interactive mock
@@ -217,7 +217,7 @@ system in [`design/DESIGN.md`](design/DESIGN.md) with a typeable mock at
 [`design/mockup.html`](design/mockup.html).
 
 - [x] **MVP** — terminal editor, markdown preview, file operations, Notion deploy, CLI
-- [ ] **Phase 1** — GUI (iced) with fixed typography (iA Writer Quattro / Mono,
+- [ ] **Phase 1** — GUI (iced) with fixed typography (Newsreader / iA Writer Mono /
   Literata), rope buffer + undo, soft wrap, silent autosave, find, fading
   chrome, smart punctuation
 - [ ] **Phase 2** — focus mode, Hemingway mode, zen mode, typewriter scrolling,
@@ -255,7 +255,7 @@ Built with:
 - [reqwest](https://github.com/seanmonstar/reqwest) - HTTP client
 - [clap](https://github.com/clap-rs/clap) - CLI argument parser
 
-Typefaces: [Instrument Sans](https://github.com/Instrument/instrument-sans),
+Typefaces: [Newsreader](https://github.com/productiontype/Newsreader),
 [iA Writer Mono](https://github.com/iaolo/iA-Fonts),
 [Literata](https://github.com/googlefonts/literata) — all SIL OFL, bundled.
 

@@ -5,8 +5,8 @@ with one-command deployment to Notion. Rust throughout.
 
 ## Product principles (non-negotiable)
 
-1. **Typography is the product.** Fonts are a fixed, bundled set — iA Writer
-   Quattro (writing), iA Writer Mono (chrome/code), Literata (preview). There is
+1. **Typography is the product.** Fonts are a fixed, bundled set — Newsreader
+   16pt (writing), iA Writer Mono (chrome/code), Literata (preview). There is
    deliberately **no font or appearance configuration** and there never will be.
 2. **Every word is human.** AI must never compose, autocomplete, or ghost-write
    into the buffer. Future AI (not now) may only annotate in a margin when
@@ -53,9 +53,9 @@ this file is only the condensed handover summary.
     `text_editor` is the interaction layer; every edit syncs into
     `polaris-core::Document` as a char-diff (`Document::replace_range`), so
     core owns undo grouping. Custom cosmic-text widget deferred to Phase 2.
-    Typeface decided 2026-07-05 after an audition: **Instrument Sans** for
-    writing mode (true italics vendored); Mono stays for chrome, Literata
-    still planned for preview (M4).
+    Typeface history: Quattro → Instrument Sans (2026-07-05 audition) →
+    **Newsreader 16pt** (2026-07-06, owner call after daylight use; body
+    19px/1.56). Mono stays for chrome; Literata is the preview face.
   - **M3 — landed 2026-07-05, pending owner's hands-on check:** silent
     debounced autosave (1s, Cmd+S forces + opens save-as when untitled),
     `● saved` chrome, Cmd+F find (chrome bar, Enter/Shift+Enter cycle, Esc
@@ -103,7 +103,7 @@ this file is only the condensed handover summary.
 
 - Accent color: current is north-star blue (`#4E6E8E` / dark `#8FAECB`);
   muted starlight gold was the alternative. Awaiting reaction to the mock.
-- Body size 17.5px Quattro — may want a touch larger after trying the mock.
+- Body size: Newsreader at 19px/1.56 — sanity-check after real use.
 
 ## Working conventions
 
