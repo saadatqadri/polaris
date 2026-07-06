@@ -55,6 +55,8 @@ enum Overlay {
     None,
     Find,
     SaveAs,
+    /// Cmd+R: input prefilled with the current name; Enter renames on disk.
+    Rename,
     /// Cmd+D confirmation: page + mode shown, Enter deploys, Esc cancels.
     Deploy,
 }
@@ -111,6 +113,7 @@ enum Message {
     DeployOpen,
     DeployDone(Result<String, String>),
     FindOpen,
+    RenameOpen,
     OverlayInput(String),
     OverlaySubmit { backwards: bool },
     OverlayClose,
@@ -344,6 +347,14 @@ impl App {
                 Task::none()
             }
             Message::FindOpen => self.open_overlay(Overlay::Find),
+            Message::RenameOpen => {
+                if self.doc.path().is_none() {
+                    // Nothing to rename yet — naming an untitled buffer is save-as.
+                    self.open_overlay(Overlay::SaveAs)
+                } else {
+                    self.open_overlay(Overlay::Rename)
+                }
+            }
             Message::OverlayInput(value) => {
                 self.input = value;
                 if self.overlay == Overlay::Find {
@@ -389,6 +400,35 @@ impl App {
                         }
                     }
                 }
+                Overlay::Rename => {
+                    let name = self.input.trim().to_string();
+                    if name.is_empty() {
+                        return Task::none();
+                    }
+                    // Bare names rename within the file's own directory;
+                    // paths with separators are taken as given.
+                    let target = PathBuf::from(&name);
+                    let target = if target.is_absolute() || name.contains(std::path::MAIN_SEPARATOR)
+                    {
+                        target
+                    } else {
+                        self.doc
+                            .path()
+                            .and_then(|p| p.parent())
+                            .map(|dir| dir.join(&name))
+                            .unwrap_or(target)
+                    };
+                    match self.doc.rename(target) {
+                        Ok(()) => {
+                            self.status = None;
+                            self.close_overlay()
+                        }
+                        Err(e) => {
+                            self.status = Some(format!("rename failed: {e}"));
+                            Task::none()
+                        }
+                    }
+                }
                 Overlay::Deploy => {
                     self.save_now();
                     let (Some(token), Some(page)) =
@@ -424,6 +464,7 @@ impl App {
         match overlay {
             Overlay::Find => self.refresh_matches(),
             Overlay::SaveAs => self.input.clear(),
+            Overlay::Rename => self.input = self.filename(),
             // Deploy has no input; Enter/Esc arrive via the overlay
             // subscription, so the missing-id focus below is a no-op.
             Overlay::Deploy | Overlay::None => {}
@@ -600,6 +641,12 @@ impl App {
             ]
             .spacing(12)
             .into(),
+            Overlay::Rename => row![
+                quiet_text("rename".to_string()),
+                self.chrome_input("new-name.md"),
+            ]
+            .spacing(12)
+            .into(),
             Overlay::Deploy => {
                 let page = self.deploy_page.as_deref().unwrap_or("?");
                 let short: String = page.chars().take(8).collect();
@@ -705,6 +752,7 @@ fn key_binding(key_press: KeyPress) -> Option<Binding<Message>> {
             match c {
                 "s" => return Some(Binding::Custom(Message::Save)),
                 "f" => return Some(Binding::Custom(Message::FindOpen)),
+                "r" => return Some(Binding::Custom(Message::RenameOpen)),
                 "p" => return Some(Binding::Custom(Message::TogglePreview)),
                 "t" => return Some(Binding::Custom(Message::ToggleTheme)),
                 "d" => return Some(Binding::Custom(Message::DeployOpen)),
@@ -975,6 +1023,61 @@ mod tests {
             let _ = app.update(Message::FadeTick);
         }
         assert_eq!(app.chrome_alpha, 1.0, "returned after rest");
+    }
+
+    #[test]
+    fn rename_overlay_prefills_and_renames_in_place() {
+        let dir = std::env::temp_dir().join("polaris-gui-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let old = dir.join("chapter-one.md");
+        let new = dir.join("chapter-uno.md");
+        let _ = std::fs::remove_file(&new);
+        std::fs::write(&old, "words\n").unwrap();
+
+        let (mut app, _) = App::boot(Some(old.clone()));
+        let _ = app.update(Message::RenameOpen);
+        assert_eq!(app.overlay, Overlay::Rename);
+        assert_eq!(app.input, "chapter-one.md", "prefilled with current name");
+
+        // A bare name renames within the same directory, not the cwd.
+        let _ = app.update(Message::OverlayInput("chapter-uno.md".to_string()));
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+        assert_eq!(app.overlay, Overlay::None);
+        assert!(!old.exists());
+        assert!(new.exists());
+        assert_eq!(app.filename(), "chapter-uno.md");
+        std::fs::remove_file(&new).unwrap();
+    }
+
+    #[test]
+    fn rename_refuses_overwrite_and_stays_open() {
+        let dir = std::env::temp_dir().join("polaris-gui-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = dir.join("gui-refuse-a.md");
+        let b = dir.join("gui-refuse-b.md");
+        std::fs::write(&a, "a\n").unwrap();
+        std::fs::write(&b, "precious\n").unwrap();
+
+        let (mut app, _) = App::boot(Some(a.clone()));
+        let _ = app.update(Message::RenameOpen);
+        let _ = app.update(Message::OverlayInput("gui-refuse-b.md".to_string()));
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+        assert_eq!(app.overlay, Overlay::Rename, "stays open on failure");
+        assert!(app
+            .status
+            .as_deref()
+            .unwrap_or("")
+            .contains("rename failed"));
+        assert_eq!(std::fs::read_to_string(&b).unwrap(), "precious\n");
+        std::fs::remove_file(&a).unwrap();
+        std::fs::remove_file(&b).unwrap();
+    }
+
+    #[test]
+    fn rename_on_untitled_opens_save_as() {
+        let (mut app, _) = App::boot(None);
+        let _ = app.update(Message::RenameOpen);
+        assert_eq!(app.overlay, Overlay::SaveAs);
     }
 
     #[test]

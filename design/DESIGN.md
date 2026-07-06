@@ -73,6 +73,7 @@ Two themes, both fixed. Theme follows the OS by default; one toggle, no editor.
 | `Ctrl+P` | Toggle write / preview |
 | `Ctrl+T` | Toggle light / dark (the one theme control; follows the OS at launch) |
 | `Ctrl+F` | Find |
+| `Ctrl+R` | Rename file (in-chrome, prefilled; never overwrites) |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+←/→` | Word jump |
 | `Ctrl+D` | Deploy to Notion |

@@ -135,6 +135,31 @@ impl Document {
         self.save()
     }
 
+    /// Rename/move the backing file. Pending edits are flushed to the old
+    /// path first; an existing target is refused, never overwritten. On an
+    /// untitled document this simply binds and saves (like `save_as`).
+    pub fn rename(&mut self, new_path: impl Into<PathBuf>) -> io::Result<()> {
+        let new_path = new_path.into();
+        let Some(old_path) = self.path.clone() else {
+            return self.save_as(new_path);
+        };
+        if new_path == old_path {
+            return Ok(());
+        }
+        if new_path.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("{} already exists", new_path.display()),
+            ));
+        }
+        if self.dirty {
+            self.save()?;
+        }
+        fs::rename(&old_path, &new_path)?;
+        self.path = Some(new_path);
+        Ok(())
+    }
+
     // --- editing ---
 
     pub fn insert_char(&mut self, c: char) {

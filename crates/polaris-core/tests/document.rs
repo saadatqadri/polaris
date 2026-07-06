@@ -305,6 +305,73 @@ fn open_save_roundtrip() {
 }
 
 #[test]
+fn rename_moves_the_file_and_flushes_edits() {
+    let dir = std::env::temp_dir().join("polaris-core-test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let old = dir.join("old-name.md");
+    let new = dir.join("new-name.md");
+    let _ = std::fs::remove_file(&new);
+    std::fs::write(&old, "content").unwrap();
+
+    let mut doc = Document::open(&old).unwrap();
+    doc.move_line_end(false);
+    doc.insert_str(" plus edits");
+    doc.rename(&new).unwrap();
+
+    assert_eq!(doc.path().unwrap(), new.as_path());
+    assert!(!old.exists(), "old file is gone");
+    assert_eq!(
+        std::fs::read_to_string(&new).unwrap(),
+        "content plus edits",
+        "pending edits flushed through the rename"
+    );
+    assert!(!doc.is_dirty());
+    std::fs::remove_file(&new).unwrap();
+}
+
+#[test]
+fn rename_refuses_to_overwrite() {
+    let dir = std::env::temp_dir().join("polaris-core-test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let a = dir.join("refuse-a.md");
+    let b = dir.join("refuse-b.md");
+    std::fs::write(&a, "aaa").unwrap();
+    std::fs::write(&b, "precious").unwrap();
+
+    let mut doc = Document::open(&a).unwrap();
+    assert!(doc.rename(&b).is_err());
+    assert_eq!(doc.path().unwrap(), a.as_path(), "path unchanged on error");
+    assert_eq!(std::fs::read_to_string(&b).unwrap(), "precious");
+    std::fs::remove_file(&a).unwrap();
+    std::fs::remove_file(&b).unwrap();
+}
+
+#[test]
+fn rename_untitled_binds_and_saves() {
+    let dir = std::env::temp_dir().join("polaris-core-test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("was-untitled.md");
+    let _ = std::fs::remove_file(&path);
+
+    let mut doc = Document::from_str("draft");
+    doc.rename(&path).unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "draft");
+    std::fs::remove_file(&path).unwrap();
+}
+
+#[test]
+fn rename_to_same_path_is_a_noop() {
+    let dir = std::env::temp_dir().join("polaris-core-test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("same.md");
+    std::fs::write(&path, "x").unwrap();
+    let mut doc = Document::open(&path).unwrap();
+    doc.rename(&path).unwrap();
+    assert_eq!(doc.path().unwrap(), path.as_path());
+    std::fs::remove_file(&path).unwrap();
+}
+
+#[test]
 fn save_without_path_errors() {
     let mut doc = Document::from_str("text");
     assert!(doc.save().is_err());
