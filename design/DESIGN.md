@@ -70,6 +70,7 @@ Two themes, both fixed. Theme follows the OS by default; one toggle, no editor.
 |-----|--------|
 | `Ctrl+S` | Save now (autosave runs regardless) |
 | `Ctrl+P` | Toggle write / preview |
+| `Ctrl+T` | Toggle light / dark (the one theme control; follows the OS at launch) |
 | `Ctrl+F` | Find |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+←/→` | Word jump |

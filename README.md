@@ -60,6 +60,7 @@ centered page with fixed typography.
 | `Cmd+S` | Save now (autosave runs regardless); save-as for untitled |
 | `Cmd+F` | Find (Enter/Shift+Enter cycle matches, Esc dismisses) |
 | `Cmd+P` | Toggle write / preview (Literata reading mode) |
+| `Cmd+T` | Toggle light / dark theme (follows the OS at launch) |
 | `Cmd+D` | Deploy to Notion (Enter confirms, Esc cancels) |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo |
 

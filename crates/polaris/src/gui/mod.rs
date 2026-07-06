@@ -107,6 +107,7 @@ enum Message {
     AutosaveTick,
     FadeTick,
     TogglePreview,
+    ToggleTheme,
     DeployOpen,
     DeployDone(Result<String, String>),
     FindOpen,
@@ -294,6 +295,11 @@ impl App {
                 {
                     self.save_now();
                 }
+                Task::none()
+            }
+            Message::ToggleTheme => {
+                // Session-only override; the next launch follows the OS again.
+                self.dark = !self.dark;
                 Task::none()
             }
             Message::DeployOpen => {
@@ -698,6 +704,7 @@ fn key_binding(key_press: KeyPress) -> Option<Binding<Message>> {
                 "s" => return Some(Binding::Custom(Message::Save)),
                 "f" => return Some(Binding::Custom(Message::FindOpen)),
                 "p" => return Some(Binding::Custom(Message::TogglePreview)),
+                "t" => return Some(Binding::Custom(Message::ToggleTheme)),
                 "d" => return Some(Binding::Custom(Message::DeployOpen)),
                 "z" if modifiers.shift() => return Some(Binding::Custom(Message::Redo)),
                 "z" => return Some(Binding::Custom(Message::Undo)),
@@ -739,6 +746,7 @@ fn preview_key_events(
         match key.as_ref() {
             keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::TogglePreview),
             keyboard::Key::Character("p") if modifiers.command() => Some(Message::TogglePreview),
+            keyboard::Key::Character("t") if modifiers.command() => Some(Message::ToggleTheme),
             keyboard::Key::Character("s") if modifiers.command() => Some(Message::Save),
             _ => None,
         }
@@ -965,6 +973,17 @@ mod tests {
             let _ = app.update(Message::FadeTick);
         }
         assert_eq!(app.chrome_alpha, 1.0, "returned after rest");
+    }
+
+    #[test]
+    fn theme_toggle_flips_and_works_in_preview_too() {
+        let (mut app, _) = App::boot(None);
+        let initial = app.dark;
+        let _ = app.update(Message::ToggleTheme);
+        assert_eq!(app.dark, !initial);
+        let _ = app.update(Message::TogglePreview);
+        let _ = app.update(Message::ToggleTheme);
+        assert_eq!(app.dark, initial);
     }
 
     #[test]
