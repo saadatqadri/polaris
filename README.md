@@ -38,30 +38,30 @@ sudo cp target/release/polaris /usr/local/bin/
 polaris new draft.md   # or just: polaris draft.md
 ```
 
-This creates a new markdown file and opens it in the GUI editor — a quiet,
-centered page with fixed typography, silent autosave, Cmd/Ctrl+F find, and
-Cmd/Ctrl+Z undo. The legacy terminal editor remains available as
-`polaris tui <file>` until the GUI reaches full parity (M5).
+This creates a new markdown file and opens it in the editor — one quiet,
+centered page with fixed typography.
 
 ### 2. Writing in Polaris
 
-Once in the editor, you can:
-
-- **Type** to insert text
-- **Arrow keys** to navigate
-- **Enter** to create new lines
-- **Backspace/Delete** to remove text
-- **Home/End** to jump to line start/end
-- **Tab** to insert 4 spaces
+- **Autosave is silent** — the file is written ~1s after your last
+  keystroke; `● saved` appears in the chrome when at rest
+- **Smart punctuation as you type** — `--` becomes —, quotes curl, `...`
+  becomes …; never inside code, and one Backspace right after a
+  substitution restores what you typed
+- The chrome (filename, word count, reading time) fades while you type
+  and returns when you rest
 
 ### 3. Keyboard Shortcuts
 
+`Cmd` on macOS, `Ctrl` elsewhere:
+
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+S` | Save file |
-| `Ctrl+Q` | Quit editor |
-| `Ctrl+D` | Deploy to Notion |
-| `Ctrl+P` | Toggle preview mode |
+| `Cmd+S` | Save now (autosave runs regardless); save-as for untitled |
+| `Cmd+F` | Find (Enter/Shift+Enter cycle matches, Esc dismisses) |
+| `Cmd+P` | Toggle write / preview (Literata reading mode) |
+| `Cmd+D` | Deploy to Notion (Enter confirms, Esc cancels) |
+| `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo |
 
 ### 4. Configure Notion Integration
 
@@ -76,8 +76,8 @@ Your configuration is stored in `~/.polaris.toml`.
 
 ### 5. Deploy to Notion
 
-From within the editor:
-- Press `Ctrl+D` to deploy to your default Notion page
+From within the editor: press `Cmd+D`, review the confirmation in the
+chrome (page + mode; in-editor deploys always append), and press Enter.
 
 Or from the command line:
 ```bash
@@ -164,12 +164,12 @@ Polaris converts the following markdown elements to Notion blocks:
 
 - ✅ Headers (H1, H2, H3)
 - ✅ Paragraphs
-- ✅ Bulleted lists
-- ✅ Code blocks with syntax highlighting
+- ✅ Bulleted and numbered lists
+- ✅ Bold / italic (rich-text annotations)
+- ✅ Code blocks with language tags
 - ✅ Inline code
 - ✅ Blockquotes
 - ✅ Horizontal rules
-- ⏳ Bold/Italic (coming soon)
 - ⏳ Images (coming soon)
 - ⏳ Links (coming soon)
 
@@ -177,14 +177,16 @@ Polaris converts the following markdown elements to Notion blocks:
 
 ```
 polaris/
-├── src/
-│   ├── cli/          # Command-line interface
-│   ├── config/       # Configuration management
-│   ├── editor/       # Text editor (buffer, UI)
-│   ├── notion/       # Notion API integration
-│   └── main.rs       # Application entry point
-├── Cargo.toml
-└── README.md
+├── crates/
+│   ├── polaris-core/     # UI-agnostic document core: rope buffer,
+│   │                     # grapheme cursors, undo/redo, typography
+│   ├── polaris-notion/   # markdown → Notion blocks + API client
+│   └── polaris/          # the binary: iced GUI + clap CLI
+│       ├── assets/fonts/ # embedded faces (Instrument Sans, iA Writer
+│       │                 # Mono, Literata — all SIL OFL)
+│       └── src/gui/      # window, editor, preview, theme, chrome
+├── design/               # DESIGN.md + interactive mock
+└── docs/PLAN.md          # the full project plan
 ```
 
 ## Development
@@ -246,11 +248,15 @@ MIT License - see LICENSE file for details
 ## Credits
 
 Built with:
-- [ratatui](https://github.com/ratatui-org/ratatui) - Terminal UI framework
-- [crossterm](https://github.com/crossterm-rs/crossterm) - Terminal manipulation
+- [iced](https://github.com/iced-rs/iced) - GUI framework
+- [ropey](https://github.com/cessen/ropey) - Rope text buffer
 - [pulldown-cmark](https://github.com/raphlinus/pulldown-cmark) - Markdown parser
 - [reqwest](https://github.com/seanmonstar/reqwest) - HTTP client
 - [clap](https://github.com/clap-rs/clap) - CLI argument parser
+
+Typefaces: [Instrument Sans](https://github.com/Instrument/instrument-sans),
+[iA Writer Mono](https://github.com/iaolo/iA-Fonts),
+[Literata](https://github.com/googlefonts/literata) — all SIL OFL, bundled.
 
 ---
 

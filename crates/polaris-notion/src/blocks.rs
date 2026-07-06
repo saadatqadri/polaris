@@ -13,6 +13,8 @@ pub fn markdown_to_notion_blocks(markdown: &str) -> Vec<Value> {
     let mut code_block_lang = String::new();
     // Stack of open lists: true = ordered, false = bulleted
     let mut list_stack: Vec<bool> = Vec::new();
+    let mut bold_depth: usize = 0;
+    let mut italic_depth: usize = 0;
 
     for event in parser {
         match event {
@@ -110,33 +112,15 @@ pub fn markdown_to_notion_blocks(markdown: &str) -> Vec<Value> {
             Event::Text(text) => {
                 if in_code_block {
                     code_block_content.push_str(&text);
-                } else if !current_list_items.is_empty() {
-                    push_to_last_list_item(
-                        &mut current_list_items,
-                        json!({
-                            "type": "text",
-                            "text": {
-                                "content": text.to_string()
-                            }
-                        }),
-                    );
-                } else if in_heading || in_quote {
-                    push_to_last_block(
-                        &mut blocks,
-                        json!({
-                            "type": "text",
-                            "text": {
-                                "content": text.to_string()
-                            }
-                        }),
-                    );
                 } else {
-                    current_paragraph.push(json!({
-                        "type": "text",
-                        "text": {
-                            "content": text.to_string()
-                        }
-                    }));
+                    let item = text_item(&text, bold_depth > 0, italic_depth > 0);
+                    if !current_list_items.is_empty() {
+                        push_to_last_list_item(&mut current_list_items, item);
+                    } else if in_heading || in_quote {
+                        push_to_last_block(&mut blocks, item);
+                    } else {
+                        current_paragraph.push(item);
+                    }
                 }
             }
             Event::Code(code) => {
@@ -158,14 +142,10 @@ pub fn markdown_to_notion_blocks(markdown: &str) -> Vec<Value> {
                     current_paragraph.push(rich_text_item);
                 }
             }
-            Event::Start(Tag::Strong) => {
-                // Bold text - we'll handle this with annotations in a future iteration
-            }
-            Event::End(TagEnd::Strong) => {}
-            Event::Start(Tag::Emphasis) => {
-                // Italic text - we'll handle this with annotations in a future iteration
-            }
-            Event::End(TagEnd::Emphasis) => {}
+            Event::Start(Tag::Strong) => bold_depth += 1,
+            Event::End(TagEnd::Strong) => bold_depth = bold_depth.saturating_sub(1),
+            Event::Start(Tag::Emphasis) => italic_depth += 1,
+            Event::End(TagEnd::Emphasis) => italic_depth = italic_depth.saturating_sub(1),
             Event::Rule => {
                 flush_paragraph(&mut current_paragraph, &mut blocks);
                 blocks.push(json!({
@@ -214,6 +194,27 @@ fn flush_list(list_items: &mut Vec<Value>, blocks: &mut Vec<Value>) {
         blocks.append(list_items);
         list_items.clear();
     }
+}
+
+/// A Notion rich-text item, with bold/italic annotations when set.
+fn text_item(content: &str, bold: bool, italic: bool) -> Value {
+    let mut item = json!({
+        "type": "text",
+        "text": {
+            "content": content
+        }
+    });
+    if bold || italic {
+        let mut annotations = serde_json::Map::new();
+        if bold {
+            annotations.insert("bold".to_string(), Value::Bool(true));
+        }
+        if italic {
+            annotations.insert("italic".to_string(), Value::Bool(true));
+        }
+        item["annotations"] = Value::Object(annotations);
+    }
+    item
 }
 
 fn push_to_last_block(blocks: &mut [Value], rich_text_item: Value) {
@@ -375,6 +376,31 @@ mod tests {
         assert_eq!(rich_text.len(), 2);
         assert_eq!(rich_text[1]["text"]["content"], "foo");
         assert_eq!(rich_text[1]["annotations"]["code"], true);
+    }
+
+    #[test]
+    fn bold_and_italic_become_annotations() {
+        let blocks = markdown_to_notion_blocks("plain **bold** and *italic* and ***both***");
+        let rich_text = blocks[0]["paragraph"]["rich_text"].as_array().unwrap();
+        assert_eq!(rich_text.len(), 6);
+        assert!(rich_text[0].get("annotations").is_none());
+        assert_eq!(rich_text[1]["text"]["content"], "bold");
+        assert_eq!(rich_text[1]["annotations"]["bold"], true);
+        assert!(rich_text[1]["annotations"].get("italic").is_none());
+        assert_eq!(rich_text[3]["annotations"]["italic"], true);
+        assert_eq!(rich_text[5]["annotations"]["bold"], true);
+        assert_eq!(rich_text[5]["annotations"]["italic"], true);
+    }
+
+    #[test]
+    fn bold_in_list_item_and_heading() {
+        let blocks = markdown_to_notion_blocks("# A **bold** title\n\n- item with *emphasis*");
+        let heading = blocks[0]["heading_1"]["rich_text"].as_array().unwrap();
+        assert_eq!(heading[1]["annotations"]["bold"], true);
+        let item = blocks[1]["bulleted_list_item"]["rich_text"]
+            .as_array()
+            .unwrap();
+        assert_eq!(item[1]["annotations"]["italic"], true);
     }
 
     #[test]

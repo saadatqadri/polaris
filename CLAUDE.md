@@ -76,8 +76,14 @@ this file is only the condensed handover summary.
     rules; caret-relative scroll on entry; Esc/Cmd+P exits). Known gap vs
     the mock: markdown source marks are NOT yet styled quiet in write mode —
     needs the Phase 2 custom widget/highlighter.
-  - **M5:** rewire Notion deploy + CLI to the new front-end; keep
-    `polaris deploy` headless.
+  - **M5 — landed 2026-07-05; PHASE 1 COMPLETE (pending owner's hands-on
+    check):** Cmd/Ctrl+D deploys from the GUI — in-chrome confirmation
+    (page + mode; in-editor deploys always append, replace stays CLI-only
+    because it is destructive), saves first, async via Task::perform,
+    result line with time + URL. Notion debt cleared: bold/italic →
+    rich-text annotations; `create_page` deleted. TUI deleted (`polaris
+    tui` gone; core's tests own the editing domain). `polaris deploy`
+    remains headless.
 - **Phase 2:** focus mode, Hemingway mode (backspace disabled), zen mode,
   typewriter scrolling, session word goals.
 - **Phase 3:** writer-friendly version control ("mark draft" snapshots, named
@@ -85,14 +91,13 @@ this file is only the condensed handover summary.
 - **Phase 4:** accept/reject editing workflow; more publish targets (HTML/PDF,
   gist, webhook).
 
-## Known bugs / debt in existing code
+## Known gaps / debt
 
-- No word wrap, no undo — the TUI is not prose-usable; that's why Phase 1 exists.
-- `src/notion/client.rs` — `create_page` is dead code (wire up or remove in M5).
-- Bold/italic markdown maps to plain text in Notion blocks (annotations TODO, M5).
-- Fixed 2026-07-05 (see PLAN §2): byte-index Unicode panics, `polaris new`
-  clobbering, quit-confirm, deploy-of-stale-copy, `clear_page_blocks`
-  pagination, ordered lists, paragraph-after-heading merging.
+- Markdown source marks (`#`, `**`) are not yet dimmed in write mode —
+  needs the Phase 2 custom editor widget (see M4 note above).
+- Preview scroll preservation is caret-ratio approximate, not exact.
+- Theme is detected at launch; it does not follow live OS theme changes.
+- Notion: images and links still map to plain text.
 
 ## Open questions for the user
 

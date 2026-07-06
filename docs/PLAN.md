@@ -66,8 +66,8 @@ writing to stay theirs.
 | Byte-indexed editing panics on non-ASCII input | `src/editor/buffer.rs` | **Fixed 2026-07-05** (char-indexed, with tests). M1's rope rewrite still replaces this buffer wholesale |
 | No word wrap, no undo | TUI editor | Superseded by GUI (Phase 1) |
 | `clear_page_blocks` reads only first page of blocks (no pagination cursor) | `src/notion/client.rs` | **Fixed 2026-07-05** (cursor pagination; delete errors now propagate) |
-| Bold/italic map to plain text in Notion | `src/notion/blocks.rs` | Fix in M5 (rich-text annotations) |
-| `create_page` is dead code | `src/notion/client.rs` | Wire up or remove in M5 |
+| Bold/italic map to plain text in Notion | `src/notion/blocks.rs` | **Fixed in M5** (rich-text annotations) |
+| `create_page` is dead code | `src/notion/client.rs` | **Deleted in M5** |
 | No CI | repo | CI + committed lockfile land with M1 |
 
 Also fixed 2026-07-05, with 30 unit tests (TUI buffer semantics + blocks

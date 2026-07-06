@@ -1,13 +1,11 @@
 mod cli;
 mod config;
-mod editor;
 mod gui;
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
-use editor::{Editor, TextBuffer};
 use polaris_notion::{NotionClient, PublishMode};
 use std::fs;
 use std::path::PathBuf;
@@ -44,21 +42,6 @@ fn main() -> Result<()> {
 
 async fn run_command(command: Commands) -> Result<()> {
     match command {
-        Commands::Tui { file } => {
-            if let Some(file) = file {
-                let buffer = if file.exists() {
-                    TextBuffer::from_file(file)?
-                } else {
-                    println!("File does not exist. Creating new file: {:?}", file);
-                    fs::write(&file, "").context("Failed to create file")?;
-                    TextBuffer::from_file(file)?
-                };
-                run_editor(buffer).await
-            } else {
-                run_editor(TextBuffer::new()).await
-            }
-        }
-
         Commands::Deploy { file, page, mode } => deploy_file(file, page, &mode).await,
 
         Commands::Config {
@@ -78,22 +61,6 @@ fn run_gui(file: Option<PathBuf>) -> Result<()> {
         }
     }
     gui::run(file).map_err(|e| anyhow::anyhow!("GUI failed: {e}"))
-}
-
-async fn run_editor(buffer: TextBuffer) -> Result<()> {
-    let mut editor = Editor::new(buffer);
-    editor.run()?;
-
-    // If user pressed Ctrl+D, deploy (the editor saves the buffer before setting this)
-    if editor.should_deploy {
-        if let Some(ref path) = editor.buffer.file_path {
-            deploy_file(path.clone(), None, "append").await?;
-        }
-    } else if editor.buffer.dirty && editor.buffer.file_path.is_none() {
-        println!("\nFile not saved. Use Ctrl+S in the editor or save with a filename.");
-    }
-
-    Ok(())
 }
 
 async fn deploy_file(file: PathBuf, page_id: Option<String>, mode_str: &str) -> Result<()> {

@@ -55,6 +55,8 @@ enum Overlay {
     None,
     Find,
     SaveAs,
+    /// Cmd+D confirmation: page + mode shown, Enter deploys, Esc cancels.
+    Deploy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +93,9 @@ struct App {
     chrome_alpha: f32,
     last_key_ms: Option<u64>,
     pending_revert: Option<Revert>,
+    deploy_token: Option<String>,
+    deploy_page: Option<String>,
+    deploying: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +107,8 @@ enum Message {
     AutosaveTick,
     FadeTick,
     TogglePreview,
+    DeployOpen,
+    DeployDone(Result<String, String>),
     FindOpen,
     OverlayInput(String),
     OverlaySubmit { backwards: bool },
@@ -138,6 +145,9 @@ impl App {
             chrome_alpha: 1.0,
             last_key_ms: None,
             pending_revert: None,
+            deploy_token: None,
+            deploy_page: None,
+            deploying: false,
         };
         // The widget normalizes to a trailing newline; rebase the model once
         // so subsequent diffs line up.
@@ -286,6 +296,47 @@ impl App {
                 }
                 Task::none()
             }
+            Message::DeployOpen => {
+                if self.deploying {
+                    return Task::none();
+                }
+                if self.doc.path().is_none() {
+                    self.status = Some("save before deploying (Cmd+S)".to_string());
+                    return Task::none();
+                }
+                match crate::config::Config::load() {
+                    Ok(config) => match (config.notion.token, config.notion.default_page) {
+                        (Some(token), Some(page)) => {
+                            self.deploy_token = Some(token);
+                            self.deploy_page = Some(page);
+                            self.open_overlay(Overlay::Deploy)
+                        }
+                        _ => {
+                            self.status = Some(
+                                "notion not configured — polaris config --token … --default-page …"
+                                    .to_string(),
+                            );
+                            Task::none()
+                        }
+                    },
+                    Err(e) => {
+                        self.status = Some(format!("config error: {e}"));
+                        Task::none()
+                    }
+                }
+            }
+            Message::DeployDone(result) => {
+                self.deploying = false;
+                self.status = Some(match result {
+                    Ok(url) => format!(
+                        "✓ deployed {} → {}",
+                        chrono::Local::now().format("%H:%M"),
+                        url
+                    ),
+                    Err(e) => format!("deploy failed: {e}"),
+                });
+                Task::none()
+            }
             Message::FindOpen => self.open_overlay(Overlay::Find),
             Message::OverlayInput(value) => {
                 self.input = value;
@@ -332,6 +383,30 @@ impl App {
                         }
                     }
                 }
+                Overlay::Deploy => {
+                    self.save_now();
+                    let (Some(token), Some(page)) =
+                        (self.deploy_token.clone(), self.deploy_page.clone())
+                    else {
+                        return self.close_overlay();
+                    };
+                    let markdown = self.doc.text();
+                    self.deploying = true;
+                    self.status = Some("deploying…".to_string());
+                    let close = self.close_overlay();
+                    Task::batch([
+                        close,
+                        Task::perform(
+                            async move {
+                                polaris_notion::NotionClient::new(token)
+                                    .deploy(&markdown, &page, polaris_notion::PublishMode::Append)
+                                    .await
+                                    .map_err(|e| e.to_string())
+                            },
+                            Message::DeployDone,
+                        ),
+                    ])
+                }
                 Overlay::None => Task::none(),
             },
             Message::OverlayClose => self.close_overlay(),
@@ -343,8 +418,11 @@ impl App {
         match overlay {
             Overlay::Find => self.refresh_matches(),
             Overlay::SaveAs => self.input.clear(),
-            Overlay::None => {}
+            // Deploy has no input; Enter/Esc arrive via the overlay
+            // subscription, so the missing-id focus below is a no-op.
+            Overlay::Deploy | Overlay::None => {}
         }
+        self.chrome_alpha = 1.0;
         iced::widget::operation::focus(CHROME_INPUT_ID)
     }
 
@@ -516,6 +594,21 @@ impl App {
             ]
             .spacing(12)
             .into(),
+            Overlay::Deploy => {
+                let page = self.deploy_page.as_deref().unwrap_or("?");
+                let short: String = page.chars().take(8).collect();
+                row![
+                    text("deploy to notion")
+                        .font(fonts::MONO)
+                        .size(13)
+                        .color(t.star),
+                    quiet_text(format!("append → {short}…")),
+                    space().width(Fill),
+                    quiet_text("Enter confirm · Esc cancel".to_string()),
+                ]
+                .spacing(12)
+                .into()
+            }
         };
 
         let body: Element<'_, Message> = match self.view_mode {
@@ -605,6 +698,7 @@ fn key_binding(key_press: KeyPress) -> Option<Binding<Message>> {
                 "s" => return Some(Binding::Custom(Message::Save)),
                 "f" => return Some(Binding::Custom(Message::FindOpen)),
                 "p" => return Some(Binding::Custom(Message::TogglePreview)),
+                "d" => return Some(Binding::Custom(Message::DeployOpen)),
                 "z" if modifiers.shift() => return Some(Binding::Custom(Message::Redo)),
                 "z" => return Some(Binding::Custom(Message::Undo)),
                 _ => {}
@@ -871,6 +965,51 @@ mod tests {
             let _ = app.update(Message::FadeTick);
         }
         assert_eq!(app.chrome_alpha, 1.0, "returned after rest");
+    }
+
+    #[test]
+    fn deploy_requires_a_saved_file() {
+        let (mut app, _) = App::boot(None);
+        let _ = app.update(Message::DeployOpen);
+        assert_eq!(app.overlay, Overlay::None);
+        assert!(app.status.as_deref().unwrap_or("").contains("save"));
+    }
+
+    #[test]
+    fn deploy_confirm_saves_and_starts_exactly_one_deploy() {
+        let dir = std::env::temp_dir().join("polaris-gui-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("deploy.md");
+        std::fs::write(&path, "content\n").unwrap();
+
+        let (mut app, _) = App::boot(Some(path.clone()));
+        type_into(&mut app, "更 ");
+        // Simulate a configured deploy confirmation (bypasses Config::load).
+        app.deploy_token = Some("secret".into());
+        app.deploy_page = Some("abc123def456".into());
+        app.overlay = Overlay::Deploy;
+
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+        assert!(app.deploying);
+        assert_eq!(app.overlay, Overlay::None);
+        assert!(!app.doc.is_dirty(), "saved before deploying");
+        assert!(app.status.as_deref().unwrap_or("").contains("deploying"));
+
+        // Re-triggering while in flight is a no-op.
+        let _ = app.update(Message::DeployOpen);
+        assert_eq!(app.overlay, Overlay::None);
+
+        let _ = app.update(Message::DeployDone(Ok("https://notion.so/x".into())));
+        assert!(!app.deploying);
+        assert!(app.status.as_deref().unwrap_or("").contains("deployed"));
+
+        let _ = app.update(Message::DeployDone(Err("401".into())));
+        assert!(app
+            .status
+            .as_deref()
+            .unwrap_or("")
+            .contains("deploy failed"));
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

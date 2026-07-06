@@ -14,14 +14,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Open a file in the GUI editor (also the default: `polaris [file]`)
+    /// Open a file in the editor (also the default: `polaris [file]`)
     Gui {
-        /// File to open (created if missing)
-        file: Option<PathBuf>,
-    },
-
-    /// Open a file in the legacy terminal editor (frozen; removed at M5)
-    Tui {
         /// File to open (created if missing)
         file: Option<PathBuf>,
     },
