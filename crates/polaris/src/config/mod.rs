@@ -7,6 +7,11 @@ use std::path::PathBuf;
 pub struct Config {
     #[serde(default)]
     pub notion: NotionConfig,
+
+    /// "light" | "dark" — written by the in-app Cmd+T toggle. Absent =
+    /// follow the OS (delete the key to go back to following the OS).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]

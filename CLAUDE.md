@@ -96,7 +96,11 @@ this file is only the condensed handover summary.
 - Markdown source marks (`#`, `**`) are not yet dimmed in write mode —
   needs the Phase 2 custom editor widget (see M4 note above).
 - Preview scroll preservation is caret-ratio approximate, not exact.
-- Theme is detected at launch; it does not follow live OS theme changes.
+- Theme: Cmd+T persists to `~/.polaris.toml` (`theme` key; delete it to
+  follow the OS). No live OS-theme following.
+- Close protection covers window close requests (close button / Cmd+W).
+  macOS Cmd+Q via the app menu may terminate without a close request —
+  unverified; if last-second keystrokes ever drop on Cmd+Q, that's why.
 - Notion: images and links still map to plain text.
 
 ## Open questions for the user

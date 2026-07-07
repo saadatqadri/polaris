@@ -47,6 +47,9 @@ pub fn run(path: Option<PathBuf>) -> iced::Result {
         .font(fonts::READING_SEMIBOLD_BYTES)
         .default_font(fonts::WRITING)
         .window_size(iced::Size::new(760.0, 940.0))
+        // Close requests route through update() so the buffer is flushed
+        // before exit (see Message::CloseRequested).
+        .exit_on_close_request(false)
         .run()
 }
 
@@ -98,6 +101,8 @@ struct App {
     deploy_token: Option<String>,
     deploy_page: Option<String>,
     deploying: bool,
+    /// An untitled buffer got one close warning; the next close discards.
+    close_pending: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -117,6 +122,7 @@ enum Message {
     OverlayInput(String),
     OverlaySubmit { backwards: bool },
     OverlayClose,
+    CloseRequested(iced::window::Id),
 }
 
 impl App {
@@ -152,6 +158,7 @@ impl App {
             deploy_token: None,
             deploy_page: None,
             deploying: false,
+            close_pending: false,
         };
         // The widget normalizes to a trailing newline; rebase the model once
         // so subsequent diffs line up.
@@ -183,6 +190,7 @@ impl App {
         if self.view_mode == ViewMode::Preview {
             subs.push(event::listen_with(preview_key_events));
         }
+        subs.push(iced::window::close_requests().map(Message::CloseRequested));
         // Fade animation ticks: while typing recently or not yet fully back.
         let recently_typed = self
             .last_key_ms
@@ -213,6 +221,7 @@ impl App {
                 self.perform_with_typography(action);
                 if is_edit {
                     self.status = None;
+                    self.close_pending = false; // new content re-arms the close warning
                     self.last_key_ms = Some(self.now_ms());
                     let new_text = self.content.text();
                     if new_text != self.last_text {
@@ -301,8 +310,14 @@ impl App {
                 Task::none()
             }
             Message::ToggleTheme => {
-                // Session-only override; the next launch follows the OS again.
                 self.dark = !self.dark;
+                // Persist the choice (best-effort). Skipped under test so the
+                // suite never writes the developer's real ~/.polaris.toml.
+                if !cfg!(test) {
+                    let mut config = crate::config::Config::load().unwrap_or_default();
+                    config.theme = Some(if self.dark { "dark" } else { "light" }.to_string());
+                    let _ = config.save();
+                }
                 Task::none()
             }
             Message::DeployOpen => {
@@ -456,6 +471,26 @@ impl App {
                 Overlay::None => Task::none(),
             },
             Message::OverlayClose => self.close_overlay(),
+            Message::CloseRequested(id) => {
+                if self.doc.path().is_some() {
+                    if self.doc.is_dirty() {
+                        self.save_now();
+                        if self.doc.is_dirty() {
+                            // Save failed; status has the reason — stay open.
+                            return Task::none();
+                        }
+                    }
+                    iced::window::close(id)
+                } else if !self.doc.text().trim().is_empty() && !self.close_pending {
+                    // Untitled with content: one chance to name it.
+                    self.close_pending = true;
+                    self.status =
+                        Some("unsaved — name it (Enter), or close again to discard".to_string());
+                    self.open_overlay(Overlay::SaveAs)
+                } else {
+                    iced::window::close(id)
+                }
+            }
         }
     }
 
@@ -820,8 +855,13 @@ fn in_code_context(before: &str) -> bool {
     line.chars().filter(|&c| c == '`').count() % 2 == 1
 }
 
+/// A persisted Cmd+T choice wins; otherwise follow the OS.
 fn detect_dark() -> bool {
-    matches!(dark_light::detect(), Ok(dark_light::Mode::Dark))
+    match crate::config::Config::load().ok().and_then(|c| c.theme) {
+        Some(theme) if theme == "dark" => true,
+        Some(theme) if theme == "light" => false,
+        _ => matches!(dark_light::detect(), Ok(dark_light::Mode::Dark)),
+    }
 }
 
 /// Widget `Position.column` is a byte offset within the line (cosmic-text's
@@ -1023,6 +1063,42 @@ mod tests {
             let _ = app.update(Message::FadeTick);
         }
         assert_eq!(app.chrome_alpha, 1.0, "returned after rest");
+    }
+
+    #[test]
+    fn close_request_flushes_dirty_named_buffer() {
+        let dir = std::env::temp_dir().join("polaris-gui-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("close-flush.md");
+        std::fs::write(&path, "start\n").unwrap();
+
+        let (mut app, _) = App::boot(Some(path.clone()));
+        type_into(&mut app, "last-second words ");
+        assert!(app.doc.is_dirty());
+        let _ = app.update(Message::CloseRequested(iced::window::Id::unique()));
+        assert!(!app.doc.is_dirty(), "flushed before close");
+        assert!(std::fs::read_to_string(&path)
+            .unwrap()
+            .starts_with("last-second words"));
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn close_request_on_untitled_content_warns_once() {
+        let (mut app, _) = App::boot(None);
+        type_into(&mut app, "not yet saved");
+        let id = iced::window::Id::unique();
+        let _ = app.update(Message::CloseRequested(id));
+        assert_eq!(app.overlay, Overlay::SaveAs, "one chance to name it");
+        assert!(app.close_pending);
+        // Typing re-arms the warning.
+        type_into(&mut app, " more");
+        assert!(!app.close_pending);
+        // Empty untitled buffers close without ceremony.
+        let (mut empty, _) = App::boot(None);
+        let _ = empty.update(Message::CloseRequested(id));
+        assert_eq!(empty.overlay, Overlay::None);
+        assert!(!empty.close_pending);
     }
 
     #[test]

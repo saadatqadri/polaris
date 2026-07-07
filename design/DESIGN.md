@@ -39,7 +39,9 @@ No user-facing font configuration. Ever.
 | `whisper` | `#DEDAD1` | `#33312B` | Rules, blockquote bars. |
 | `star` | `#4E6E8E` | `#8FAECB` | **The only accent.** Cursor and selection. Nothing else. |
 
-Two themes, both fixed. Theme follows the OS by default; one toggle, no editor.
+Two themes, both fixed. Theme follows the OS by default; one toggle
+(`Ctrl+T`), remembered in `~/.polaris.toml` — delete the `theme` key to
+follow the OS again. No theme editor.
 
 ## Layout & type
 

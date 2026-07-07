@@ -50,6 +50,8 @@ centered page with fixed typography.
   substitution restores what you typed
 - The chrome (filename, word count, reading time) fades while you type
   and returns when you rest
+- **Closing the window is always safe** — pending changes are flushed on
+  the way out; an untitled buffer with content gets one prompt to be named
 
 ### 3. Keyboard Shortcuts
 
@@ -61,7 +63,7 @@ centered page with fixed typography.
 | `Cmd+F` | Find (Enter/Shift+Enter cycle matches, Esc dismisses) |
 | `Cmd+R` | Rename the file (prefilled; renames in place, never overwrites) |
 | `Cmd+P` | Toggle write / preview (Literata reading mode) |
-| `Cmd+T` | Toggle light / dark theme (follows the OS at launch) |
+| `Cmd+T` | Toggle light / dark theme (remembered across launches) |
 | `Cmd+D` | Deploy to Notion (Enter confirms, Esc cancels) |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo |
 
@@ -138,6 +140,9 @@ polaris docs/api.md
 Polaris uses a TOML configuration file at `~/.polaris.toml`:
 
 ```toml
+# set by the in-app Cmd+T toggle; delete the line to follow the OS again
+theme = "light"
+
 [notion]
 token = "secret_..."
 default_page = "your-page-id"
