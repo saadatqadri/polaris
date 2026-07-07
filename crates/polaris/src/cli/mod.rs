@@ -20,6 +20,13 @@ pub enum Commands {
         file: Option<PathBuf>,
     },
 
+    /// Phase 2 spike: the custom editor widget (typewriter, focus dim)
+    #[command(hide = true)]
+    Spike {
+        /// File to open (a demo document if omitted)
+        file: Option<PathBuf>,
+    },
+
     /// Create a new markdown file and open it in the editor
     New {
         /// Name of the file to create

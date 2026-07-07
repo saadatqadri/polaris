@@ -9,6 +9,7 @@
 
 mod fonts;
 mod preview;
+pub mod spike;
 mod theme;
 
 use std::ops::Range;

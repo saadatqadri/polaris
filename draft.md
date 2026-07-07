@@ -12,7 +12,9 @@ That is the opposite of how good software gets *discovered.*
 
 Claude Code is the obvious example. I’ve been watching Claude Code emerge from the very start, and the evolution of the product has felt “organic”. I feel seen and heard by the team building Claude Code. 
 
-Nobody *could* have. It was set loose in the wild as a fairly amorphous block, and the shape came from watching what people actually did with it - what they reached for, what they abused, where they found leverage nobody anticipated. The value emerged from contact with real usage, not before it. The roadmap was downstream of the release, not upstream.
+image showing CC’s release history
+
+Nobody *could* have . It was set loose in the wild as a fairly amorphous block, and the shape came from watching what people actually did with it - what they reached for, what they abused, where they found leverage nobody anticipated. The value emerged from contact with real usage, not before it. The roadmap was downstream of the release, not upstream.
 
 If you'd run that as a factory process, you'd have specced the thing to death, optimized a production line for a product that didn't yet know what it was, and shipped a beautifully manufactured answer to the wrong question.
 
