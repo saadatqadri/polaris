@@ -211,8 +211,11 @@ linear history, repo-inside-repo handling).
 - Import an edited copy → word-level diff → accept/reject each change
   (Draft's collaboration model, without a server)
 - Publish targets beyond Notion: HTML/PDF export, GitHub gist, generic webhook
-- Only here do we *consider* summoned-AI margin annotations, per principle #2 —
-  and only critique/questions, never text generation
+- Only here do we *consider* summoned-AI margin annotations, and only under
+  the binding rules in [`docs/AI.md`](AI.md) (2026-07-07): no machine words
+  in the buffer as an architectural invariant, summonable only on a marked
+  draft (never the live buffer), critique/questions/cuts only — never
+  replacement prose. Its own design doc is required before build
 
 ---
 

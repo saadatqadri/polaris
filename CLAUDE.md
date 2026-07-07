@@ -10,7 +10,10 @@ with one-command deployment to Notion. Rust throughout.
    deliberately **no font or appearance configuration** and there never will be.
 2. **Every word is human.** AI must never compose, autocomplete, or ghost-write
    into the buffer. Future AI (not now) may only annotate in a margin when
-   explicitly summoned. Do not add AI features unprompted.
+   explicitly summoned, on a marked draft — see **`docs/AI.md`** (binding,
+   2026-07-07): no machine words in the buffer as an architectural
+   invariant; critique/cuts only, never replacement prose. Do not add AI
+   features unprompted.
 3. **Chrome recedes.** Minimal UI that fades while typing. No panels, toolbars,
    badges, or notifications in the writing surface.
 4. **Local-first.** Plain `.md` files on disk are the source of truth. Cloud

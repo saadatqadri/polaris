@@ -2,13 +2,17 @@
 
 The phrase is everywhere now. *Software factory.* Plants humming, lines moving, agents producing artifacts around the clock. It's meant to sound like progress — like we finally industrialized the messy craft of building software. I have a growing repulsion to it, and it took me a while to articulate why.
 
-A factory is a sterile environment running a linear process. That isn't an insult; it's the definition. The entire genius of a factory is that it takes a process you already understand completely and eks out margin through incremental improvement to it. Toyota didn't invent the car on the line. The line came *after* the car was known. A factory's whole reason for existing is that the hard question — *what are we making, and why does it work* — has already been answered. All that's left is to make it cheaper, faster, more uniform.
+image: 
+
+A factory is a sterile environment running a linear process. That isn't an insult; it's the definition. The entire genius of a factory is that it takes a process you already understand completely and eks out margin through incremental improvement to it. Toyota didn't invent the car on the line. The asssemby line came *after* the car was known. A factory's whole reason for existing is that the hard question — *what are we making, and why does it work* — has already been answered. All that's left is to make it cheaper, faster, more uniform.
 
 That is the opposite of how good software gets *discovered.*
 
 ## The case in point
 
-Claude Code is the obvious example, so I'll use the obvious example. Nobody designed it in a factory. Nobody *could* have. It was set loose in the wild as a fairly amorphous block, and the shape came from watching what people actually did with it — what they reached for, what they abused, where they found leverage nobody anticipated. The value emerged from contact with reality, not before it. The roadmap was downstream of the release, not upstream.
+Claude Code is the obvious example. I’ve been watching Claude Code emerge from the very start, and the evolution of the product has felt “organic”. I feel seen and heard by the team building Claude Code. 
+
+Nobody *could* have. It was set loose in the wild as a fairly amorphous block, and the shape came from watching what people actually did with it — what they reached for, what they abused, where they found leverage nobody anticipated. The value emerged from contact with reality, not before it. The roadmap was downstream of the release, not upstream.w
 
 If you'd run that as a factory process, you'd have specced the thing to death, optimized a production line for a product that didn't yet know what it was, and shipped a beautifully manufactured answer to the wrong question.
 
@@ -32,11 +36,12 @@ The work isn't growth versus process. Both modes have process. The work is knowi
 
 Here's the part that makes this urgent rather than philosophical, and it's the part most of the discourse skips: the organism was *always* the better discovery process. It simply wasn't affordable.
 
-Selection mode has a brutal prerequisite. To run it, you have to generate widely and cull most of what you generate. Evolution works because variation is cheap and death is free. For nearly all of software history, neither was true. Producing a single variant cost weeks of expensive engineer time. When each variation is that costly, you *cannot* afford to make ten and keep one — you'd go broke. So the rational move was to front-load specification: minimize the number of expensive variants you commit to, and try to be right on paper before you spent the money. The factory metaphor wasn't stupid. It was a correct adaptation to the cost of variation.
+Selection mode has a brutal prerequisite. To run it, you have to generate     //widely and cull most of what you generate. Evolution works because variation is cheap and death is free. For nearly all of software history, neither was true. Producing a single variant cost weeks of expensive engineer time. When each    variation is that costly, you *cannot* afford to make ten and keep one — you'd go broke. So the rational move was to front-load specification: minimize the number of expensive variants you commit to, and try to be right on paper before you spent the money. The factory metaphor wasn't stupid. It was a correct adaptation to the cost of variation.
 
 Coding agents broke that constraint. Generating a variant is now cheap and fast — minutes, not weeks. The thing that made selection mode economically ruinous just collapsed. For the first time, you can actually afford to build the way an organism builds: vary widely, expose it to the environment, kill almost everything, keep what survives. The metaphor isn't newly *nicer*. It's newly *affordable*.
 
-And velocity is only half of it. The other half is attention. When agents absorb execution, the scarcest human resource stops being the ability to write the code and becomes the judgment to read what comes back — which variant survived contact, what the behavior is telling you, what to kill. We used to spend our attention on production. Now it's freed, and it has to be spent on selection. That isn't a side effect of the shift. That *is* the shift.
+And velocity is only half of it. The other half is attention. When agents absorb 
+execution, the scarcest human resource stops being the ability to write the code and becomes the judgment to read what comes back — which variant survived contact, what the behavior is telling you, what to kill. We used to spend our attention on production. Now it's freed, and it has to be spent on selection. That isn't a side effect of the shift. That *is* the shift.
 
 Which raises the stakes rather than lowering them. Cheap variation also means cheap slop. The old constraint — *can we even afford to build this?* — used to do your culling for you; scarcity was a filter that ran for free. Remove it and nothing gets killed automatically anymore. The bottleneck moved from generation to selection. If your selection loop can't keep pace with what your agents can now produce, you don't get an organism. You get a tumor.
 
