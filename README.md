@@ -16,18 +16,24 @@ Polaris is a fast, keyboard-driven terminal text editor that lets you write mark
 
 ## Installation
 
-### Prerequisites
-
-- Rust 1.70 or later
-- Cargo (comes with Rust)
-
-### Build from Source
+### Quick install (macOS / Linux)
 
 ```bash
-git clone https://github.com/yourusername/polaris.git
+curl -fsSL https://raw.githubusercontent.com/saadatqadri/polaris/main/install.sh | sh
+```
+
+Fetches the latest prebuilt binary from GitHub Releases into
+`~/.local/bin` (override with `POLARIS_INSTALL_DIR`). Binaries are not
+yet code-signed; installing via the script avoids macOS quarantine.
+
+### Build from source
+
+Requires Rust (stable):
+
+```bash
+git clone https://github.com/saadatqadri/polaris.git
 cd polaris
-cargo build --release
-sudo cp target/release/polaris /usr/local/bin/
+cargo install --path crates/polaris
 ```
 
 ## Quick Start
@@ -232,6 +238,10 @@ system in [`design/DESIGN.md`](design/DESIGN.md) with a typeable mock at
   word-level diffs, backed by invisible git
 - [ ] **Phase 4** — accept/reject editing workflow; more publish targets
   (HTML/PDF, gist, webhook)
+- [ ] **Phase 5** — ship it: signed/notarized `.app`, Homebrew tap, quiet
+  updates (prebuilt releases + installer already live)
+- [ ] **Phase 6** — iOS: iPad first, then iPhone — native front-end over
+  `polaris-core` via FFI, documents in the Files app
 
 **A note on AI:** Polaris will never generate, autocomplete, or ghost-write
 text. Every word in a Polaris document is typed by a person.

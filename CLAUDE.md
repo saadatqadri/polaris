@@ -93,6 +93,12 @@ this file is only the condensed handover summary.
   versions, word-level diffs) backed by invisible git.
 - **Phase 4:** accept/reject editing workflow; more publish targets (HTML/PDF,
   gist, webhook).
+- **Phase 5:** ship it — signing/notarization, .app bundle, Homebrew tap,
+  quiet updates. Prebuilt releases + install.sh live since 2026-07-07
+  (tag `v*` triggers .github/workflows/release.yml).
+- **Phase 6:** iOS, iPad first — native (SwiftUI) front-end over
+  polaris-core via FFI (iced has no iOS target); .md files via the Files
+  app / iCloud Drive. Design doc required first.
 
 ## Known gaps / debt
 

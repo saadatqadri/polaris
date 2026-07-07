@@ -219,6 +219,27 @@ linear history, repo-inside-repo handling).
 
 ---
 
+### Phase 5 — Ship it
+Getting Polaris into other people's hands (started 2026-07-07 with
+tag-triggered GitHub Releases + `install.sh` for the first outside tester):
+- macOS code signing + notarization; a proper `.app` bundle (double-click
+  launch, Dock icon, Cmd+Q safety)
+- Homebrew tap; Linux packaging as demand appears
+- A quiet update check (chrome-styled, never a dialog)
+- A small website: the mock is already the pitch
+
+### Phase 6 — iOS (iPad first, then iPhone)
+The architecture bet pays off or it doesn't: **`polaris-core` is the
+portable asset.** iced does not target iOS, so the mobile front-end will
+be native (SwiftUI) over the Rust core compiled for iOS behind FFI
+(e.g. uniffi) — exactly the "front-ends are replaceable" split from §3.
+- iPad first: external-keyboard writing is the core scenario
+- Documents stay plain `.md` via the Files app / iCloud Drive — local-first
+  survives intact, sync is the OS's job, not ours
+- Same fixed typography, no settings, AI rules per `docs/AI.md`
+- Requires its own design doc before build (FFI surface, text input stack,
+  what of the GUI shim is reusable vs rewritten)
+
 ## 6. Engineering conventions
 
 - **Testing:** unit tests required in `polaris-core` and `polaris-notion`
