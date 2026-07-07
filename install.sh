@@ -26,9 +26,22 @@ target="${arch}-${os}"
 url="https://github.com/${REPO}/releases/latest/download/polaris-${target}.tar.gz"
 dir="${POLARIS_INSTALL_DIR:-$HOME/.local/bin}"
 
-mkdir -p "$dir"
+# Download to a temp file first: a pipe into tar swallows curl failures
+# (empty input can exit 0), which would turn a 404 into a confusing mess.
+tmp="$(mktemp -t polaris.XXXXXX.tar.gz)"
+trap 'rm -f "$tmp"' EXIT
+
 echo "Downloading polaris (${target})…"
-curl -fL --progress-bar "$url" | tar xz -C "$dir"
+if ! curl -fL --progress-bar "$url" -o "$tmp"; then
+  echo "" >&2
+  echo "polaris: download failed ($url)" >&2
+  echo "  Either no release has been published yet (check" >&2
+  echo "  https://github.com/${REPO}/releases) or this target has no build." >&2
+  exit 1
+fi
+
+mkdir -p "$dir"
+tar xzf "$tmp" -C "$dir"
 chmod +x "$dir/polaris"
 echo "✓ Installed: $dir/polaris"
 
