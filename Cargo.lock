@@ -2934,7 +2934,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "polaris"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2953,7 +2953,7 @@ dependencies = [
 
 [[package]]
 name = "polaris-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ropey",
  "unicode-segmentation",
@@ -2961,7 +2961,7 @@ dependencies = [
 
 [[package]]
 name = "polaris-drafts"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2973,7 +2973,7 @@ dependencies = [
 
 [[package]]
 name = "polaris-notion"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "pulldown-cmark",
