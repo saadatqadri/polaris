@@ -81,6 +81,16 @@ follow the OS again. No theme editor.
 | `Ctrl+D` | Deploy to Notion |
 | `Ctrl+Q` | Quit |
 
+## Keyboard map (Phase 2 — the writing modes)
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+Y` | Typewriter scrolling (caret row held at 45% of the viewport) |
+| `Ctrl+G` | Focus mode (current paragraph at full ink, rest at 30%) |
+| `Ctrl+E` | Hemingway mode (backspace/delete/cut disabled — forward only) |
+| `Ctrl+K` | Zen (chrome hidden; overlays and status still summon it) |
+| `Ctrl+L` | Session word goal (in-chrome input; whisper-quiet progress) |
+
 ## Implementation notes (iced)
 
 - Fonts load once at startup from embedded bytes; `cosmic-text` (iced's text

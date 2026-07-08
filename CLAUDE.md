@@ -93,8 +93,12 @@ this file is only the condensed handover summary.
   selection with drag + double-click word select, clipboard, auto-scroll.
   New: quiet markdown marks in write mode, steady caret (DESIGN: nothing
   blinks), Cmd+Y typewriter scrolling, Cmd+G focus dim (session flags).
-  Remaining Phase 2: Hemingway mode, zen mode, session goals, typewriter
-  feel-tuning after real writing.
+  **Phase 2 complete 2026-07-08 (pending owner's real-writing round):**
+  Hemingway (Cmd+E, forward-only; undo deliberately still allowed), zen
+  (Cmd+K; status messages and overlays still summon the chrome), session
+  goals (Cmd+L, in-chrome input, counts words since set, quiet ✓ when
+  met). All session flags — no persistence, no settings, per DESIGN.
+  Typewriter hold (45%) awaits feel-tuning from real use.
 - **Phase 3:** writer-friendly version control ("mark draft" snapshots, named
   versions, word-level diffs) backed by invisible git.
 - **Phase 4:** accept/reject editing workflow; more publish targets (HTML/PDF,

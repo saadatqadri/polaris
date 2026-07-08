@@ -72,6 +72,11 @@ centered page with fixed typography.
 | `Cmd+T` | Toggle light / dark theme (remembered across launches) |
 | `Cmd+D` | Deploy to Notion (Enter confirms, Esc cancels) |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo |
+| `Cmd+Y` | Typewriter scrolling — your line holds still |
+| `Cmd+G` | Focus mode — dim everything but the current paragraph |
+| `Cmd+E` | Hemingway mode — forward only, no deleting |
+| `Cmd+K` | Zen mode — chrome hidden until summoned |
+| `Cmd+L` | Session word goal (a number sets it, empty clears it) |
 
 ### 4. Configure Notion Integration
 
@@ -232,8 +237,8 @@ system in [`design/DESIGN.md`](design/DESIGN.md) with a typeable mock at
 - [ ] **Phase 1** — GUI (iced) with fixed typography (Newsreader / iA Writer Mono /
   Literata), rope buffer + undo, soft wrap, silent autosave, find, fading
   chrome, smart punctuation
-- [ ] **Phase 2** — focus mode, Hemingway mode, zen mode, typewriter scrolling,
-  session goals
+- [x] **Phase 2** — custom editor widget, focus mode, Hemingway mode, zen
+  mode, typewriter scrolling, session goals
 - [ ] **Phase 3** — writer-friendly version control: named draft snapshots and
   word-level diffs, backed by invisible git
 - [ ] **Phase 4** — accept/reject editing workflow; more publish targets

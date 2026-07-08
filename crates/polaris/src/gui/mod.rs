@@ -59,12 +59,21 @@ enum Overlay {
     Rename,
     /// Cmd+D confirmation: page + mode shown, Enter deploys, Esc cancels.
     Deploy,
+    /// Cmd+L: session word goal — a number sets it, empty clears it.
+    Goal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ViewMode {
     Write,
     Preview,
+}
+
+/// A session word goal: progress counts words written since it was set.
+#[derive(Debug, Clone, Copy)]
+struct Goal {
+    target: usize,
+    baseline: usize,
 }
 
 /// One backspace right after a smart-punctuation substitution restores the
@@ -102,6 +111,11 @@ struct App {
     /// Phase 2 writing modes (session flags for now).
     typewriter: bool,
     focus_dim: bool,
+    /// Hemingway mode: backspace/delete/cut disabled — forward only.
+    hemingway: bool,
+    /// Zen mode: chrome hidden until summoned (overlays and status still show).
+    zen: bool,
+    goal: Option<Goal>,
 }
 
 #[derive(Debug, Clone)]
@@ -156,6 +170,9 @@ impl App {
             close_pending: false,
             typewriter: false,
             focus_dim: false,
+            hemingway: false,
+            zen: false,
+            goal: None,
         };
 
         (app, Task::none())
@@ -181,14 +198,34 @@ impl App {
             subs.push(event::listen_with(preview_key_events));
         }
         subs.push(iced::window::close_requests().map(Message::CloseRequested));
-        // Fade animation ticks: while typing recently or not yet fully back.
+        // Fade animation ticks: while not at the target or typing recently.
         let recently_typed = self
             .last_key_ms
             .is_some_and(|t| self.now_ms().saturating_sub(t) < FADE_REST_MS + 100);
-        if self.chrome_alpha < 1.0 || recently_typed {
+        if (self.chrome_alpha - self.chrome_target()).abs() > f32::EPSILON || recently_typed {
             subs.push(iced::time::every(Duration::from_millis(40)).map(|_| Message::FadeTick));
         }
         Subscription::batch(subs)
+    }
+
+    /// Where the chrome fade is heading. Overlays, preview, and status
+    /// messages always summon it; zen hides it; typing hides it briefly.
+    fn chrome_target(&self) -> f32 {
+        if self.overlay != Overlay::None
+            || self.view_mode == ViewMode::Preview
+            || self.status.is_some()
+        {
+            1.0
+        } else if self.zen {
+            0.0
+        } else if self
+            .last_key_ms
+            .is_some_and(|t| self.now_ms().saturating_sub(t) < FADE_REST_MS)
+        {
+            0.0
+        } else {
+            1.0
+        }
     }
 
     fn filename(&self) -> String {
@@ -220,18 +257,7 @@ impl App {
         match message {
             Message::Editor(action) => self.on_editor_action(action),
             Message::FadeTick => {
-                let now = self.now_ms();
-                let target = if self.overlay != Overlay::None || self.view_mode == ViewMode::Preview
-                {
-                    1.0
-                } else if self
-                    .last_key_ms
-                    .is_some_and(|t| now.saturating_sub(t) < FADE_REST_MS)
-                {
-                    0.0
-                } else {
-                    1.0
-                };
+                let target = self.chrome_target();
                 let dt = 0.040_f32;
                 if target < self.chrome_alpha {
                     self.chrome_alpha = (self.chrome_alpha - dt / FADE_OUT_SECS).max(0.0);
@@ -413,6 +439,26 @@ impl App {
                         }
                     }
                 }
+                Overlay::Goal => {
+                    let value = self.input.trim().to_string();
+                    if value.is_empty() {
+                        self.goal = None;
+                        return self.close_overlay();
+                    }
+                    match value.parse::<usize>() {
+                        Ok(target) if target > 0 => {
+                            self.goal = Some(Goal {
+                                target,
+                                baseline: self.doc.word_count(),
+                            });
+                            self.close_overlay()
+                        }
+                        _ => {
+                            self.status = Some("goal: enter a word count, e.g. 500".to_string());
+                            Task::none()
+                        }
+                    }
+                }
                 Overlay::Deploy => {
                     self.save_now();
                     let (Some(token), Some(page)) =
@@ -466,6 +512,8 @@ impl App {
     fn on_editor_action(&mut self, action: editor::Action) -> Task<Message> {
         use editor::Action as A;
         match action {
+            // Hemingway mode: forward only — deletion waits for the edit pass.
+            A::Backspace | A::Delete | A::Cut if self.hemingway => {}
             A::Insert(s) => {
                 self.insert_with_typography(&s);
                 self.note_edit();
@@ -563,6 +611,15 @@ impl App {
                 self.focus_dim = !self.focus_dim;
                 Task::none()
             }
+            "e" => {
+                self.hemingway = !self.hemingway;
+                Task::none()
+            }
+            "k" => {
+                self.zen = !self.zen;
+                Task::none()
+            }
+            "l" => self.open_overlay(Overlay::Goal),
             _ => Task::none(),
         }
     }
@@ -611,6 +668,9 @@ impl App {
             Overlay::Find => self.refresh_matches(),
             Overlay::SaveAs => self.input.clear(),
             Overlay::Rename => self.input = self.filename(),
+            Overlay::Goal => {
+                self.input = self.goal.map(|g| g.target.to_string()).unwrap_or_default();
+            }
             // Deploy has no input; Enter/Esc arrive via the overlay
             // subscription, so the missing-id focus below is a no-op.
             Overlay::Deploy | Overlay::None => {}
@@ -664,27 +724,28 @@ impl App {
                 let right = match &self.status {
                     Some(status) => status.clone(),
                     None => {
-                        let reading = format!(" · {} min", (words as f32 / 220.0).ceil().max(1.0));
-                        format!(
-                            "{} words{}{}{}{}",
-                            words,
-                            if words > 0 { &reading } else { "" },
-                            if self.view_mode == ViewMode::Preview {
-                                " · preview"
-                            } else {
-                                ""
-                            },
-                            if self.typewriter {
-                                " · typewriter"
-                            } else {
-                                ""
-                            },
-                            if self.doc.is_dirty() {
-                                ""
-                            } else {
-                                " · ● saved"
-                            }
-                        )
+                        let mut parts: Vec<String> = vec![format!("{words} words")];
+                        if words > 0 {
+                            parts.push(format!("{} min", (words as f32 / 220.0).ceil().max(1.0)));
+                        }
+                        if let Some(goal) = self.goal {
+                            let written = words.saturating_sub(goal.baseline);
+                            let done = if written >= goal.target { " ✓" } else { "" };
+                            parts.push(format!("session {written}/{}{done}", goal.target));
+                        }
+                        if self.view_mode == ViewMode::Preview {
+                            parts.push("preview".to_string());
+                        }
+                        if self.typewriter {
+                            parts.push("typewriter".to_string());
+                        }
+                        if self.hemingway {
+                            parts.push("hemingway".to_string());
+                        }
+                        if !self.doc.is_dirty() {
+                            parts.push("● saved".to_string());
+                        }
+                        parts.join(" · ")
                     }
                 };
                 row![
@@ -719,6 +780,12 @@ impl App {
             Overlay::Rename => row![
                 quiet_text("rename".to_string()),
                 self.chrome_input("new-name.md"),
+            ]
+            .spacing(12)
+            .into(),
+            Overlay::Goal => row![
+                quiet_text("session goal".to_string()),
+                self.chrome_input("words (empty clears)"),
             ]
             .spacing(12)
             .into(),
@@ -1027,6 +1094,74 @@ mod tests {
         assert!(app.focus_dim);
         let _ = app.update(Message::Editor(editor::Action::Command("f".to_string())));
         assert_eq!(app.overlay, Overlay::Find);
+    }
+
+    #[test]
+    fn hemingway_mode_is_forward_only() {
+        let (mut app, _) = App::boot(None);
+        type_into(&mut app, "first draft");
+        let _ = app.update(Message::Editor(editor::Action::Command("e".to_string())));
+        assert!(app.hemingway);
+
+        act(&mut app, editor::Action::Backspace);
+        act(&mut app, editor::Action::Delete);
+        act(&mut app, editor::Action::SelectAll);
+        act(&mut app, editor::Action::Cut);
+        assert_eq!(app.doc.text(), "first draft", "nothing deletes");
+
+        type_into(&mut app, " continues");
+        assert!(app.doc.text().contains("continues"), "typing still works");
+
+        let _ = app.update(Message::Editor(editor::Action::Command("e".to_string())));
+        act(&mut app, editor::Action::Backspace);
+        assert!(!app.doc.text().contains("continues s"), "deletion restored");
+    }
+
+    #[test]
+    fn zen_hides_chrome_but_status_and_overlays_summon_it() {
+        let (mut app, _) = App::boot(None);
+        let _ = app.update(Message::Editor(editor::Action::Command("k".to_string())));
+        assert!(app.zen);
+        for _ in 0..40 {
+            let _ = app.update(Message::FadeTick);
+        }
+        assert_eq!(app.chrome_alpha, 0.0, "zen drains the chrome");
+
+        app.status = Some("save failed: disk full".to_string());
+        for _ in 0..40 {
+            let _ = app.update(Message::FadeTick);
+        }
+        assert_eq!(app.chrome_alpha, 1.0, "status must be visible even in zen");
+
+        app.status = None;
+        let _ = app.update(Message::FindOpen);
+        assert_eq!(app.chrome_alpha, 1.0, "overlays summon the chrome");
+    }
+
+    #[test]
+    fn session_goal_sets_counts_and_clears() {
+        let (mut app, _) = App::boot(None);
+        type_into(&mut app, "one two three");
+        let _ = app.update(Message::Editor(editor::Action::Command("l".to_string())));
+        assert_eq!(app.overlay, Overlay::Goal);
+        let _ = app.update(Message::OverlayInput("5".to_string()));
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+        let goal = app.goal.expect("goal set");
+        assert_eq!((goal.target, goal.baseline), (5, 3));
+
+        // Non-numeric input keeps the overlay open with a hint.
+        let _ = app.update(Message::Editor(editor::Action::Command("l".to_string())));
+        assert_eq!(app.input, "5", "prefilled with the current target");
+        let _ = app.update(Message::OverlayInput("soon".to_string()));
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+        assert_eq!(app.overlay, Overlay::Goal);
+        assert!(app.status.as_deref().unwrap_or("").contains("goal"));
+
+        // Empty clears.
+        let _ = app.update(Message::OverlayInput(String::new()));
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+        assert!(app.goal.is_none());
+        assert_eq!(app.overlay, Overlay::None);
     }
 
     #[test]
