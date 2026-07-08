@@ -25,7 +25,7 @@ open it in a browser, type in it, toggle the theme and preview.
 |------|---------|------|
 | **Newsreader (16pt optical size)** | SIL OFL | Writing mode. Editorial serif with the finest italic of the audition. (Revised 2026-07-06 after daylight use; previously Instrument Sans, originally iA Writer Quattro.) |
 | **iA Writer Mono** | SIL OFL | Chrome (status line), code blocks, source-literal contexts. |
-| **Literata** | SIL OFL | Preview / reading mode. |
+| — | | Preview uses the writing face (unified 2026-07-08; Literata retired — the rendering, not a face change, carries the mode switch). |
 
 No user-facing font configuration. Ever.
 
@@ -64,7 +64,7 @@ follow the OS again. No theme editor.
   keystroke it returns.
 - **Smart typography as you type:** `"` → “ ”, `'` → ‘ ’, `--` → —, `...` → ….
   Applied at input time so the file itself carries the real characters.
-- **Preview** (`Ctrl+P`): the same column re-set in Literata, markdown rendered.
+- **Preview** (`Ctrl+P`): the same column, markdown rendered — same face, one voice (unified 2026-07-08).
   A mode switch, not a split — one page, one focus.
 
 ## Keyboard map (Phase 1)
@@ -94,7 +94,7 @@ follow the OS again. No theme editor.
 ## Implementation notes (iced)
 
 - Fonts load once at startup from embedded bytes; `cosmic-text` (iced's text
-  stack) handles shaping, so Quattro/Literata render correctly incl. ligatures.
+  stack) handles shaping, so the embedded faces render correctly incl. ligatures.
 - The editor view is a custom widget over `polaris-core`'s rope buffer —
   soft wrap comes from real text layout.
 - Preview reuses the existing `pulldown-cmark` pipeline, rendering to styled

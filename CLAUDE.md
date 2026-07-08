@@ -6,7 +6,7 @@ with one-command deployment to Notion. Rust throughout.
 ## Product principles (non-negotiable)
 
 1. **Typography is the product.** Fonts are a fixed, bundled set — Newsreader
-   16pt (writing), iA Writer Mono (chrome/code), Literata (preview). There is
+   16pt (writing AND preview — one voice since 2026-07-08), iA Writer Mono (chrome/code). There is
    deliberately **no font or appearance configuration** and there never will be.
 2. **Every word is human.** AI must never compose, autocomplete, or ghost-write
    into the buffer. Future AI (not now) may only annotate in a margin when
@@ -58,7 +58,7 @@ this file is only the condensed handover summary.
     core owns undo grouping. Custom cosmic-text widget deferred to Phase 2.
     Typeface history: Quattro → Instrument Sans (2026-07-05 audition) →
     **Newsreader 16pt** (2026-07-06, owner call after daylight use; body
-    19px/1.56). Mono stays for chrome; Literata is the preview face.
+    19px/1.56). Mono stays for chrome. Literata retired 2026-07-08: preview unified on Newsreader (owner call — the face change read as noise once both were serifs; the rendering carries the mode switch).
   - **M3 — landed 2026-07-05, pending owner's hands-on check:** silent
     debounced autosave (1s, Cmd+S forces + opens save-as when untitled),
     `● saved` chrome, Cmd+F find (chrome bar, Enter/Shift+Enter cycle, Esc
@@ -74,7 +74,7 @@ this file is only the condensed handover summary.
     overlays/preview), word count + reading time, smart punctuation applied
     at input (core transforms; skipped inside code fences/spans via a
     backtick-parity heuristic; one backspace right after a substitution
-    restores the literal keystrokes), Cmd/Ctrl+P preview in Literata
+    restores the literal keystrokes), Cmd/Ctrl+P preview (unified on the writing face 2026-07-08)
     (pulldown-cmark → iced rich text: headings, lists, quotes, code blocks,
     rules; caret-relative scroll on entry; Esc/Cmd+P exits). Known gap vs
     the mock: markdown source marks are NOT yet styled quiet in write mode —

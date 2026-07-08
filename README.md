@@ -2,7 +2,7 @@
 
 > A local-first markdown editor with Notion deployment
 
-Polaris is a fast, keyboard-driven terminal text editor that lets you write markdown locally and deploy it to Notion with a single command. Inspired by the minimalism of classic editors and built for modern workflows.
+Polaris is a quiet, keyboard-driven markdown editor — one warm page, fixed typography — that lets you write locally and deploy to Notion with a single command.
 
 ## Features
 
@@ -11,7 +11,7 @@ Polaris is a fast, keyboard-driven terminal text editor that lets you write mark
 - 📝 **Markdown Native**: Write in pure markdown, deploy anywhere
 - 🔄 **Notion Integration**: One-command deployment to Notion pages
 - 👁️ **Live Preview**: Built-in markdown preview mode
-- 🎯 **Distraction-Free**: Clean, minimal terminal interface
+- 🎯 **Distraction-Free**: one page, fading chrome, writing modes
 - 💾 **Auto-Save**: Optional autosave keeps your work safe
 
 ## Installation
@@ -68,7 +68,7 @@ centered page with fixed typography.
 | `Cmd+S` | Save now (autosave runs regardless); save-as for untitled |
 | `Cmd+F` | Find (Enter/Shift+Enter cycle matches, Esc dismisses) |
 | `Cmd+R` | Rename the file (prefilled; renames in place, never overwrites) |
-| `Cmd+P` | Toggle write / preview (Literata reading mode) |
+| `Cmd+P` | Toggle write / preview (rendered markdown, same face) |
 | `Cmd+T` | Toggle light / dark theme (remembered across launches) |
 | `Cmd+D` | Deploy to Notion (Enter confirms, Esc cancels) |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo |
@@ -201,7 +201,7 @@ polaris/
 │   ├── polaris-notion/   # markdown → Notion blocks + API client
 │   └── polaris/          # the binary: iced GUI + clap CLI
 │       ├── assets/fonts/ # embedded faces (Newsreader, iA Writer
-│       │                 # Mono, Literata — all SIL OFL)
+│       │                 # Mono — all SIL OFL)
 │       └── src/gui/      # window, editor, preview, theme, chrome
 ├── design/               # DESIGN.md + interactive mock
 └── docs/PLAN.md          # the full project plan
@@ -234,8 +234,8 @@ system in [`design/DESIGN.md`](design/DESIGN.md) with a typeable mock at
 [`design/mockup.html`](design/mockup.html).
 
 - [x] **MVP** — terminal editor, markdown preview, file operations, Notion deploy, CLI
-- [ ] **Phase 1** — GUI (iced) with fixed typography (Newsreader / iA Writer Mono /
-  Literata), rope buffer + undo, soft wrap, silent autosave, find, fading
+- [x] **Phase 1** — GUI (iced) with fixed typography (Newsreader, iA Writer Mono),
+  rope buffer + undo, soft wrap, silent autosave, find, fading
   chrome, smart punctuation
 - [x] **Phase 2** — custom editor widget, focus mode, Hemingway mode, zen
   mode, typewriter scrolling, session goals
@@ -277,8 +277,7 @@ Built with:
 - [clap](https://github.com/clap-rs/clap) - CLI argument parser
 
 Typefaces: [Newsreader](https://github.com/productiontype/Newsreader),
-[iA Writer Mono](https://github.com/iaolo/iA-Fonts),
-[Literata](https://github.com/googlefonts/literata) — all SIL OFL, bundled.
+[iA Writer Mono](https://github.com/iaolo/iA-Fonts) — all SIL OFL, bundled.
 
 ---
 

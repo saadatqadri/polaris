@@ -1,4 +1,4 @@
-//! Preview mode (M4): the same column re-set in Literata, markdown rendered
+//! Preview mode: the same column, markdown rendered — one voice (Newsreader)
 //! to iced widgets via pulldown-cmark. A mode switch, not a split.
 
 use iced::widget::text::Span;
@@ -8,7 +8,7 @@ use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
 
 use super::{fonts, theme};
 
-const BODY_SIZE: f32 = 18.5;
+const BODY_SIZE: f32 = 19.0;
 
 fn italic(base: Font) -> Font {
     Font {
@@ -36,7 +36,7 @@ pub fn view<'a, M: 'a>(source: &str, t: theme::Tokens) -> Element<'a, M> {
     let mut item_spans: Option<Vec<Span<'a>>> = None;
 
     let current_font = |bold: usize, emphasis: usize, in_quote: bool| -> Option<Font> {
-        let base = fonts::READING;
+        let base = fonts::WRITING;
         match (bold > 0, emphasis > 0 || in_quote) {
             (true, _) => Some(semibold(base)),
             (false, true) => Some(italic(base)),
@@ -52,7 +52,7 @@ pub fn view<'a, M: 'a>(source: &str, t: theme::Tokens) -> Element<'a, M> {
             return;
         }
         let body = rich_text(std::mem::take(spans))
-            .font(fonts::READING)
+            .font(fonts::WRITING)
             .size(BODY_SIZE)
             .line_height(text::LineHeight::Relative(1.6))
             .color(t.ink);
@@ -91,7 +91,7 @@ pub fn view<'a, M: 'a>(source: &str, t: theme::Tokens) -> Element<'a, M> {
                 if !spans.is_empty() {
                     blocks.push(
                         rich_text(std::mem::take(&mut spans))
-                            .font(semibold(fonts::READING))
+                            .font(semibold(fonts::WRITING))
                             .size(size)
                             .line_height(text::LineHeight::Relative(1.3))
                             .color(t.ink)
@@ -172,7 +172,7 @@ pub fn view<'a, M: 'a>(source: &str, t: theme::Tokens) -> Element<'a, M> {
                         row![
                             container(
                                 text(marker)
-                                    .font(fonts::READING)
+                                    .font(fonts::WRITING)
                                     .size(BODY_SIZE)
                                     .line_height(text::LineHeight::Relative(1.6))
                                     .color(t.quiet)
@@ -180,7 +180,7 @@ pub fn view<'a, M: 'a>(source: &str, t: theme::Tokens) -> Element<'a, M> {
                             .width(30),
                             container(
                                 rich_text(item)
-                                    .font(fonts::READING)
+                                    .font(fonts::WRITING)
                                     .size(BODY_SIZE)
                                     .line_height(text::LineHeight::Relative(1.6))
                                     .color(t.ink)

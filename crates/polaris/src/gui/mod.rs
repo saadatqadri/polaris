@@ -39,9 +39,6 @@ pub fn run(path: Option<PathBuf>) -> iced::Result {
         .font(fonts::WRITING_ITALIC_BYTES)
         .font(fonts::WRITING_SEMIBOLD_BYTES)
         .font(fonts::MONO_REGULAR_BYTES)
-        .font(fonts::READING_REGULAR_BYTES)
-        .font(fonts::READING_ITALIC_BYTES)
-        .font(fonts::READING_SEMIBOLD_BYTES)
         .default_font(fonts::WRITING)
         .window_size(iced::Size::new(760.0, 940.0))
         // Close requests route through update() so the buffer is flushed
