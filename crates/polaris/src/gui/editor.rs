@@ -661,16 +661,16 @@ impl<Message> Widget<Message, Theme, Renderer> for EditorView<'_, Message> {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 state.dragging = false;
             }
-            Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                if cursor.position_in(bounds).is_some() && !self.typewriter {
-                    let dy = match delta {
-                        mouse::ScrollDelta::Lines { y, .. } => y * line_height_px(),
-                        mouse::ScrollDelta::Pixels { y, .. } => *y,
-                    };
-                    let max = (state.content_height() - bounds.height).max(0.0);
-                    state.scroll.set((state.scroll.get() - dy).clamp(0.0, max));
-                    shell.request_redraw();
-                }
+            Event::Mouse(mouse::Event::WheelScrolled { delta })
+                if cursor.position_in(bounds).is_some() && !self.typewriter =>
+            {
+                let dy = match delta {
+                    mouse::ScrollDelta::Lines { y, .. } => y * line_height_px(),
+                    mouse::ScrollDelta::Pixels { y, .. } => *y,
+                };
+                let max = (state.content_height() - bounds.height).max(0.0);
+                state.scroll.set((state.scroll.get() - dy).clamp(0.0, max));
+                shell.request_redraw();
             }
             _ => {}
         }
