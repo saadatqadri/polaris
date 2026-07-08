@@ -19,10 +19,6 @@ fn main() -> Result<()> {
     match cli.command {
         Some(Commands::Gui { file }) => run_gui(file),
 
-        Some(Commands::Spike { file }) => {
-            gui::spike::run(file).map_err(|e| anyhow::anyhow!("spike failed: {e}"))
-        }
-
         Some(Commands::New { filename }) => {
             let path = PathBuf::from(&filename);
             if path.exists() {
@@ -53,9 +49,7 @@ async fn run_command(command: Commands) -> Result<()> {
             default_page,
         } => configure(token, default_page),
 
-        Commands::Gui { .. } | Commands::Spike { .. } | Commands::New { .. } => {
-            unreachable!("handled in main")
-        }
+        Commands::Gui { .. } | Commands::New { .. } => unreachable!("handled in main"),
     }
 }
 

@@ -87,8 +87,14 @@ this file is only the condensed handover summary.
     rich-text annotations; `create_page` deleted. TUI deleted (`polaris
     tui` gone; core's tests own the editing domain). `polaris deploy`
     remains headless.
-- **Phase 2:** focus mode, Hemingway mode (backspace disabled), zen mode,
-  typewriter scrolling, session word goals.
+- **Phase 2 — editor widget landed 2026-07-08 (pending hands-on):**
+  `gui/editor.rs` replaced the `text_editor` shim entirely — Document is
+  the single source of truth (no `apply_diff`). Parity: IME preedit/commit,
+  selection with drag + double-click word select, clipboard, auto-scroll.
+  New: quiet markdown marks in write mode, steady caret (DESIGN: nothing
+  blinks), Cmd+Y typewriter scrolling, Cmd+G focus dim (session flags).
+  Remaining Phase 2: Hemingway mode, zen mode, session goals, typewriter
+  feel-tuning after real writing.
 - **Phase 3:** writer-friendly version control ("mark draft" snapshots, named
   versions, word-level diffs) backed by invisible git.
 - **Phase 4:** accept/reject editing workflow; more publish targets (HTML/PDF,

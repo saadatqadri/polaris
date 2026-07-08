@@ -51,3 +51,13 @@ from the `text_editor` shim to the widget, then delete `apply_diff` — the
 Document becomes the single source of truth with no sync layer at all.
 Typewriter/focus/zen then become Phase 2 feature flags on the widget
 rather than new machinery.
+
+---
+
+**2026-07-08 — promoted.** The widget now lives in `gui/editor.rs` and IS
+the main editor: parity items landed (IME preedit + commit, selection
+rendering with drag and double-click word select, clipboard, auto-scroll
+with caret margin), the `text_editor` shim and `apply_diff` are deleted,
+and `Document` is the single source of truth. Typewriter (Cmd+Y) and focus
+dim (Cmd+G) are session flags in the app. The caret is steady by design.
+The spike module itself is gone.

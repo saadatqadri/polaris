@@ -1,29 +1,25 @@
-//! The iced GUI shell (Phase 1, M2–M3).
+//! The iced GUI shell (Phase 1 M2–M5, Phase 2 editor widget).
 //!
-//! Per PLAN §7 decision #3, the view/interaction layer is iced's
-//! `text_editor`; `polaris-core::Document` stays the document model. Every
-//! editor action that changes text is synced into the `Document` as a
-//! char-level diff via `replace_range`, which preserves core's word-sized
-//! undo grouping. Undo/redo run in core and rebuild the widget content.
-//! The custom cosmic-text widget replaces this shim in Phase 2.
+//! Since the Phase 2 promotion, the editor surface is our own widget
+//! ([`editor::EditorView`]) rendering `polaris-core::Document` directly:
+//! the Document is the single source of truth, the widget emits
+//! [`editor::Action`]s, and there is no sync layer. Typewriter scrolling
+//! (Cmd+Y) and focus dimming (Cmd+G) are widget flags.
 
+mod editor;
 mod fonts;
 mod preview;
-pub mod spike;
 mod theme;
 
 use std::ops::Range;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use iced::widget::text_editor;
-use iced::widget::text_editor::{Binding, Content, Edit, KeyPress};
 use iced::widget::{column, container, row, scrollable, space, text, text_input};
 use iced::{
     event, keyboard, Background, Border, Element, Fill, Padding, Subscription, Task, Theme,
 };
 
-use polaris_core::buffer::Buffer;
 use polaris_core::{typography, AutosaveTimer, Document};
 
 const CHROME_INPUT_ID: &str = "chrome-input";
@@ -83,9 +79,8 @@ struct Revert {
 
 struct App {
     doc: Document,
-    content: Content,
-    /// The widget's text as of the last sync; diffed against on each edit.
-    last_text: String,
+    /// Bumped on every text change; keys the widget's paragraph cache.
+    text_version: u64,
     dark: bool,
     status: Option<String>,
     overlay: Overlay,
@@ -104,14 +99,15 @@ struct App {
     deploying: bool,
     /// An untitled buffer got one close warning; the next close discards.
     close_pending: bool,
+    /// Phase 2 writing modes (session flags for now).
+    typewriter: bool,
+    focus_dim: bool,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
-    Edit(text_editor::Action),
+    Editor(editor::Action),
     Save,
-    Undo,
-    Redo,
     AutosaveTick,
     FadeTick,
     TogglePreview,
@@ -139,11 +135,9 @@ impl App {
             None => Document::new(),
         };
 
-        let content = Content::with_text(&doc.text());
-        let mut app = Self {
+        let app = Self {
             doc,
-            last_text: content.text(),
-            content,
+            text_version: 0,
             dark: detect_dark(),
             status: None,
             overlay: Overlay::None,
@@ -160,16 +154,11 @@ impl App {
             deploy_page: None,
             deploying: false,
             close_pending: false,
+            typewriter: false,
+            focus_dim: false,
         };
-        // The widget normalizes to a trailing newline; rebase the model once
-        // so subsequent diffs line up.
-        let doc_text = app.doc.text();
-        if app.last_text != doc_text {
-            apply_diff(&mut app.doc, &doc_text, &app.last_text.clone());
-            app.doc.commit_undo_group();
-        }
 
-        (app, iced::widget::operation::focus_next())
+        (app, Task::none())
     }
 
     fn title(&self) -> String {
@@ -215,27 +204,21 @@ impl App {
         self.epoch.elapsed().as_millis() as u64
     }
 
+    /// Bookkeeping after any text mutation.
+    fn note_edit(&mut self) {
+        self.text_version += 1;
+        self.status = None;
+        self.close_pending = false; // new content re-arms the close warning
+        self.last_key_ms = Some(self.now_ms());
+        self.autosave.note_edit(self.now_ms());
+        if self.overlay == Overlay::Find {
+            self.refresh_matches();
+        }
+    }
+
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Edit(action) => {
-                let is_edit = action.is_edit();
-                self.perform_with_typography(action);
-                if is_edit {
-                    self.status = None;
-                    self.close_pending = false; // new content re-arms the close warning
-                    self.last_key_ms = Some(self.now_ms());
-                    let new_text = self.content.text();
-                    if new_text != self.last_text {
-                        apply_diff(&mut self.doc, &self.last_text, &new_text);
-                        self.last_text = new_text;
-                        self.autosave.note_edit(self.now_ms());
-                        if self.overlay == Overlay::Find {
-                            self.refresh_matches();
-                        }
-                    }
-                }
-                Task::none()
-            }
+            Message::Editor(action) => self.on_editor_action(action),
             Message::FadeTick => {
                 let now = self.now_ms();
                 let target = if self.overlay != Overlay::None || self.view_mode == ViewMode::Preview
@@ -263,8 +246,7 @@ impl App {
                     self.chrome_alpha = 1.0;
                     // Approximate scroll preservation: land at the caret's
                     // relative position in the document.
-                    let caret = char_index_of(self.doc.buffer(), self.content.cursor().position);
-                    let line = self.doc.buffer().char_to_line(caret) as f32;
+                    let line = self.doc.buffer().char_to_line(self.doc.cursor().pos) as f32;
                     let total = self.doc.buffer().len_lines().max(2) as f32;
                     iced::widget::operation::snap_to(
                         PREVIEW_SCROLL_ID,
@@ -276,7 +258,7 @@ impl App {
                 }
                 ViewMode::Preview => {
                     self.view_mode = ViewMode::Write;
-                    iced::widget::operation::focus_next()
+                    Task::none()
                 }
             },
             Message::Save => {
@@ -286,20 +268,6 @@ impl App {
                     self.save_now();
                     Task::none()
                 }
-            }
-            Message::Undo => {
-                if self.doc.undo() {
-                    self.sync_from_doc();
-                    self.autosave.note_edit(self.now_ms());
-                }
-                Task::none()
-            }
-            Message::Redo => {
-                if self.doc.redo() {
-                    self.sync_from_doc();
-                    self.autosave.note_edit(self.now_ms());
-                }
-                Task::none()
             }
             Message::AutosaveTick => {
                 if self.doc.is_dirty()
@@ -376,7 +344,7 @@ impl App {
                 if self.overlay == Overlay::Find {
                     self.refresh_matches();
                     // Jump to the first match at or after the caret.
-                    let caret = char_index_of(self.doc.buffer(), self.content.cursor().position);
+                    let caret = self.doc.cursor().pos;
                     let first = self
                         .matches
                         .iter()
@@ -495,6 +463,148 @@ impl App {
         }
     }
 
+    fn on_editor_action(&mut self, action: editor::Action) -> Task<Message> {
+        use editor::Action as A;
+        match action {
+            A::Insert(s) => {
+                self.insert_with_typography(&s);
+                self.note_edit();
+            }
+            A::Enter => {
+                self.doc.insert_newline();
+                self.pending_revert = None;
+                self.note_edit();
+            }
+            A::Backspace => {
+                if let Some(revert) = self.pending_revert.take() {
+                    let pos = self.doc.cursor().pos;
+                    self.doc
+                        .replace_range(pos.saturating_sub(revert.inserted)..pos, &revert.literal);
+                } else {
+                    self.doc.backspace();
+                }
+                self.note_edit();
+            }
+            A::Delete => {
+                self.doc.delete_forward();
+                self.pending_revert = None;
+                self.note_edit();
+            }
+            A::Move(motion, extend) => {
+                use editor::Motion as M;
+                self.pending_revert = None;
+                match motion {
+                    M::Left => self.doc.move_left(extend),
+                    M::Right => self.doc.move_right(extend),
+                    M::Up => self.doc.move_up(extend),
+                    M::Down => self.doc.move_down(extend),
+                    M::WordLeft => self.doc.move_word_left(extend),
+                    M::WordRight => self.doc.move_word_right(extend),
+                    M::Home => self.doc.move_line_start(extend),
+                    M::End => self.doc.move_line_end(extend),
+                }
+            }
+            A::SelectAll => self.doc.select_all(),
+            A::Click { position, extend } => {
+                self.pending_revert = None;
+                self.doc.set_cursor_pos(position, extend);
+            }
+            A::DragTo { position } => self.doc.set_cursor_pos(position, true),
+            A::SelectWord { position } => {
+                let range = editor::word_range_at(self.doc.buffer(), position);
+                self.doc.set_cursor_pos(range.start, false);
+                self.doc.set_cursor_pos(range.end, true);
+            }
+            A::Cut => {
+                if self.doc.selection().is_some() {
+                    self.doc.backspace();
+                    self.note_edit();
+                }
+            }
+            A::Paste(s) => {
+                if !s.is_empty() {
+                    self.doc.insert_str(&s);
+                    self.pending_revert = None;
+                    self.note_edit();
+                }
+            }
+            A::Undo => {
+                if self.doc.undo() {
+                    self.pending_revert = None;
+                    self.note_edit();
+                }
+            }
+            A::Redo => {
+                if self.doc.redo() {
+                    self.pending_revert = None;
+                    self.note_edit();
+                }
+            }
+            A::Command(key) => return self.on_command(&key),
+        }
+        Task::none()
+    }
+
+    /// The app-level keymap, reached through the editor widget's unclaimed
+    /// Cmd/Ctrl shortcuts.
+    fn on_command(&mut self, key: &str) -> Task<Message> {
+        match key {
+            "s" => self.update(Message::Save),
+            "f" => self.update(Message::FindOpen),
+            "r" => self.update(Message::RenameOpen),
+            "p" => self.update(Message::TogglePreview),
+            "t" => self.update(Message::ToggleTheme),
+            "d" => self.update(Message::DeployOpen),
+            "y" => {
+                self.typewriter = !self.typewriter;
+                Task::none()
+            }
+            "g" => {
+                self.focus_dim = !self.focus_dim;
+                Task::none()
+            }
+            _ => Task::none(),
+        }
+    }
+
+    /// Insert typed text, applying smart punctuation to single plain chars
+    /// (DESIGN.md: applied at input time so the file carries the real
+    /// characters). Never inside code spans/fences.
+    fn insert_with_typography(&mut self, s: &str) {
+        let mut chars = s.chars();
+        let (Some(c), None) = (chars.next(), chars.next()) else {
+            self.doc.insert_str(s);
+            self.pending_revert = None;
+            return;
+        };
+        if self.doc.selection().is_none() {
+            let pos = self.doc.cursor().pos;
+            let before = self.doc.buffer().slice(0..pos);
+            if !in_code_context(&before) {
+                if let Some(sub) = typography::substitute(&before, c) {
+                    let mut literal: String = before
+                        .chars()
+                        .rev()
+                        .take(sub.delete_before)
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect();
+                    literal.push(c);
+                    self.doc
+                        .replace_range(pos - sub.delete_before..pos, sub.insert);
+                    self.pending_revert = Some(Revert {
+                        inserted: sub.insert.chars().count(),
+                        literal,
+                    });
+                    return;
+                }
+            }
+        }
+        self.doc.insert_char(c);
+        self.pending_revert = None;
+    }
+
     fn open_overlay(&mut self, overlay: Overlay) -> Task<Message> {
         self.overlay = overlay;
         match overlay {
@@ -511,7 +621,7 @@ impl App {
 
     fn close_overlay(&mut self) -> Task<Message> {
         self.overlay = Overlay::None;
-        iced::widget::operation::focus_next()
+        Task::none()
     }
 
     fn refresh_matches(&mut self) {
@@ -521,15 +631,12 @@ impl App {
         }
     }
 
-    /// Move the editor caret to select match `idx` (start..end).
+    /// Select match `idx` in the document; the widget renders and reveals it.
     fn select_match(&mut self, idx: usize) {
         if let Some(range) = self.matches.get(idx).cloned() {
             self.current_match = idx;
-            let buffer = self.doc.buffer();
-            self.content.move_to(text_editor::Cursor {
-                position: position_of(buffer, range.end),
-                selection: Some(position_of(buffer, range.start)),
-            });
+            self.doc.set_cursor_pos(range.start, false);
+            self.doc.set_cursor_pos(range.end, true);
         }
     }
 
@@ -540,79 +647,6 @@ impl App {
                 self.status = None;
             }
             Err(e) => self.status = Some(format!("save failed: {e}")),
-        }
-    }
-
-    /// Perform an editor action, applying smart punctuation to plain char
-    /// inserts (DESIGN.md: applied at input time so the file carries the real
-    /// characters). Never inside code spans/fences; one backspace right after
-    /// a substitution restores the literal keystrokes.
-    fn perform_with_typography(&mut self, action: text_editor::Action) {
-        match &action {
-            text_editor::Action::Edit(Edit::Insert(c)) if self.content.selection().is_none() => {
-                let caret = char_index_of(self.doc.buffer(), self.content.cursor().position);
-                let before = self.doc.buffer().slice(0..caret);
-                if !in_code_context(&before) {
-                    if let Some(sub) = typography::substitute(&before, *c) {
-                        let mut literal: String = before
-                            .chars()
-                            .rev()
-                            .take(sub.delete_before)
-                            .collect::<Vec<_>>()
-                            .into_iter()
-                            .rev()
-                            .collect();
-                        literal.push(*c);
-                        for _ in 0..sub.delete_before {
-                            self.content
-                                .perform(text_editor::Action::Edit(Edit::Backspace));
-                        }
-                        for ch in sub.insert.chars() {
-                            self.content
-                                .perform(text_editor::Action::Edit(Edit::Insert(ch)));
-                        }
-                        self.pending_revert = Some(Revert {
-                            inserted: sub.insert.chars().count(),
-                            literal,
-                        });
-                        return;
-                    }
-                }
-                self.pending_revert = None;
-                self.content.perform(action);
-            }
-            text_editor::Action::Edit(Edit::Backspace) => {
-                if let Some(revert) = self.pending_revert.take() {
-                    for _ in 0..revert.inserted {
-                        self.content
-                            .perform(text_editor::Action::Edit(Edit::Backspace));
-                    }
-                    for ch in revert.literal.chars() {
-                        self.content
-                            .perform(text_editor::Action::Edit(Edit::Insert(ch)));
-                    }
-                    return;
-                }
-                self.content.perform(action);
-            }
-            _ => {
-                self.pending_revert = None;
-                self.content.perform(action);
-            }
-        }
-    }
-
-    /// Rebuild widget content from the model (after undo/redo).
-    fn sync_from_doc(&mut self) {
-        self.content = Content::with_text(&self.doc.text());
-        let position = position_of(self.doc.buffer(), self.doc.cursor().pos);
-        self.content.move_to(text_editor::Cursor {
-            position,
-            selection: None,
-        });
-        self.last_text = self.content.text();
-        if self.overlay == Overlay::Find {
-            self.refresh_matches();
         }
     }
 
@@ -632,11 +666,16 @@ impl App {
                     None => {
                         let reading = format!(" · {} min", (words as f32 / 220.0).ceil().max(1.0));
                         format!(
-                            "{} words{}{}{}",
+                            "{} words{}{}{}{}",
                             words,
                             if words > 0 { &reading } else { "" },
                             if self.view_mode == ViewMode::Preview {
                                 " · preview"
+                            } else {
+                                ""
+                            },
+                            if self.typewriter {
+                                " · typewriter"
                             } else {
                                 ""
                             },
@@ -701,46 +740,32 @@ impl App {
         };
 
         let body: Element<'_, Message> = match self.view_mode {
-            ViewMode::Write => text_editor(&self.content)
-                .on_action(Message::Edit)
-                .key_binding(key_binding)
-                .font(fonts::WRITING)
-                // Newsreader runs optically small: 19px here ≈ the old
-                // 17.5px of Instrument Sans (audition-tuned).
-                .size(19)
-                .line_height(text::LineHeight::Relative(1.56))
-                .height(Fill)
-                .padding(Padding {
-                    top: 4.0,
-                    right: 2.0,
-                    // Breathing room so the caret never writes at the window
-                    // edge (typewriter scrolling proper lands in Phase 2).
-                    bottom: 220.0,
-                    left: 2.0,
-                })
-                .style(move |_theme, _status| text_editor::Style {
-                    background: Background::Color(t.bg),
-                    border: Border::default(),
-                    placeholder: t.quiet,
-                    value: t.ink,
-                    selection: iced::Color { a: 0.35, ..t.star },
-                })
-                .into(),
-            ViewMode::Preview => scrollable(container(preview::view(&self.last_text, t)).padding(
-                Padding {
-                    top: 4.0,
-                    right: 2.0,
-                    bottom: 220.0,
-                    left: 2.0,
-                },
-            ))
-            .id(PREVIEW_SCROLL_ID)
-            .height(Fill)
-            .width(Fill)
+            ViewMode::Write => editor::EditorView::new(
+                &self.doc,
+                self.text_version,
+                self.overlay == Overlay::None,
+                self.typewriter,
+                self.focus_dim,
+                t,
+                Message::Editor,
+            )
             .into(),
+            ViewMode::Preview => {
+                let source = self.doc.text();
+                scrollable(container(preview::view(&source, t)).padding(Padding {
+                    top: 4.0,
+                    right: 2.0,
+                    bottom: 220.0,
+                    left: 2.0,
+                }))
+                .id(PREVIEW_SCROLL_ID)
+                .height(Fill)
+                .width(Fill)
+                .into()
+            }
         };
 
-        // ~62ch at 17.5px
+        // ~62ch at 19px
         let page = container(column![chrome, body].spacing(26))
             .max_width(600)
             .height(Fill);
@@ -781,26 +806,6 @@ impl App {
     }
 }
 
-fn key_binding(key_press: KeyPress) -> Option<Binding<Message>> {
-    let modifiers = key_press.modifiers;
-    if modifiers.command() {
-        if let keyboard::Key::Character(c) = key_press.key.as_ref() {
-            match c {
-                "s" => return Some(Binding::Custom(Message::Save)),
-                "f" => return Some(Binding::Custom(Message::FindOpen)),
-                "r" => return Some(Binding::Custom(Message::RenameOpen)),
-                "p" => return Some(Binding::Custom(Message::TogglePreview)),
-                "t" => return Some(Binding::Custom(Message::ToggleTheme)),
-                "d" => return Some(Binding::Custom(Message::DeployOpen)),
-                "z" if modifiers.shift() => return Some(Binding::Custom(Message::Redo)),
-                "z" => return Some(Binding::Custom(Message::Undo)),
-                _ => {}
-            }
-        }
-    }
-    Binding::from_key_press(key_press)
-}
-
 /// Enter / Shift+Enter / Esc for the chrome overlays. Only subscribed while
 /// an overlay is open; `text_input` has no key-binding hook of its own.
 fn overlay_key_events(
@@ -822,7 +827,7 @@ fn overlay_key_events(
 }
 
 /// Cmd/Ctrl+P or Esc leaves preview; Cmd/Ctrl+S still saves. Subscribed only
-/// while previewing (the editor and its bindings aren't mounted then).
+/// while previewing (the editor widget isn't mounted then).
 fn preview_key_events(
     event: iced::Event,
     _status: event::Status,
@@ -865,81 +870,25 @@ fn detect_dark() -> bool {
     }
 }
 
-/// Widget `Position.column` is a byte offset within the line (cosmic-text's
-/// cursor index); these convert to/from the model's char indices.
-fn position_of(buffer: &Buffer, char_idx: usize) -> text_editor::Position {
-    let line = buffer.char_to_line(char_idx);
-    let line_start = buffer.line_to_char(line);
-    let text = buffer.line(line);
-    let column = text
-        .char_indices()
-        .nth(char_idx - line_start)
-        .map(|(b, _)| b)
-        .unwrap_or(text.len());
-    text_editor::Position { line, column }
-}
-
-fn char_index_of(buffer: &Buffer, position: text_editor::Position) -> usize {
-    let line = position.line.min(buffer.len_lines().saturating_sub(1));
-    let line_start = buffer.line_to_char(line);
-    let text = buffer.line(line);
-    let byte = position.column.min(text.len());
-    let mut chars = 0;
-    for (b, _) in text.char_indices() {
-        if b >= byte {
-            break;
-        }
-        chars += 1;
-    }
-    line_start + chars
-}
-
-/// Sync one widget edit into the model as a minimal char-level edit
-/// (common prefix/suffix), preserving core's undo grouping.
-fn apply_diff(doc: &mut Document, old: &str, new: &str) {
-    if old == new {
-        return;
-    }
-    let old_chars: Vec<char> = old.chars().collect();
-    let new_chars: Vec<char> = new.chars().collect();
-
-    let mut prefix = 0;
-    while prefix < old_chars.len()
-        && prefix < new_chars.len()
-        && old_chars[prefix] == new_chars[prefix]
-    {
-        prefix += 1;
-    }
-    let mut suffix = 0;
-    while suffix < old_chars.len() - prefix
-        && suffix < new_chars.len() - prefix
-        && old_chars[old_chars.len() - 1 - suffix] == new_chars[new_chars.len() - 1 - suffix]
-    {
-        suffix += 1;
-    }
-
-    let inserted: String = new_chars[prefix..new_chars.len() - suffix].iter().collect();
-    doc.replace_range(prefix..old_chars.len() - suffix, &inserted);
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{apply_diff, char_index_of, position_of, App, Message, Overlay, ViewMode};
-    use iced::widget::text_editor::{Action, Edit};
-    use polaris_core::Document;
+    use super::{editor, App, Message, Overlay, ViewMode};
+
+    fn act(app: &mut App, action: editor::Action) {
+        let _ = app.update(Message::Editor(action));
+    }
 
     fn type_into(app: &mut App, s: &str) {
         for c in s.chars() {
-            let edit = if c == '\n' {
-                Edit::Enter
+            if c == '\n' {
+                act(app, editor::Action::Enter);
             } else {
-                Edit::Insert(c)
-            };
-            let _ = app.update(Message::Edit(Action::Edit(edit)));
+                act(app, editor::Action::Insert(c.to_string()));
+            }
         }
     }
 
-    /// The full M3 loop, headless: edit -> debounce -> autosave hits disk.
+    /// The full loop, headless: edit -> debounce -> autosave hits disk.
     #[test]
     fn update_loop_autosaves_after_debounce() {
         let dir = std::env::temp_dir().join("polaris-gui-test");
@@ -960,8 +909,8 @@ mod tests {
         assert!(!app.doc.is_dirty());
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
-            app.content.text(),
-            "autosave wrote the widget text"
+            app.doc.text(),
+            "autosave wrote the document"
         );
         assert!(std::fs::read_to_string(&path)
             .unwrap()
@@ -994,7 +943,7 @@ mod tests {
         let (mut app, _) = App::boot(None);
         type_into(&mut app, "wait -- \"really\" it's...");
         assert_eq!(
-            app.doc.text().trim_end(),
+            app.doc.text(),
             "wait \u{2014} \u{201C}really\u{201D} it\u{2019}s\u{2026}"
         );
     }
@@ -1019,10 +968,10 @@ mod tests {
         let (mut app, _) = App::boot(None);
         type_into(&mut app, "a--");
         assert!(app.doc.text().starts_with("a\u{2014}"));
-        let _ = app.update(Message::Edit(Action::Edit(Edit::Backspace)));
+        act(&mut app, editor::Action::Backspace);
         assert!(app.doc.text().starts_with("a--"), "literal restored");
         // A second backspace is a plain backspace again.
-        let _ = app.update(Message::Edit(Action::Edit(Edit::Backspace)));
+        act(&mut app, editor::Action::Backspace);
         assert!(app.doc.text().starts_with("a-"));
     }
 
@@ -1034,6 +983,50 @@ mod tests {
             app.doc.text().contains("\n---"),
             "hr not turned into a dash"
         );
+    }
+
+    #[test]
+    fn paste_and_cut_roundtrip_through_core() {
+        let (mut app, _) = App::boot(None);
+        act(
+            &mut app,
+            editor::Action::Paste("pasted words\n".to_string()),
+        );
+        assert_eq!(app.doc.text(), "pasted words\n");
+        act(&mut app, editor::Action::SelectAll);
+        act(&mut app, editor::Action::Cut);
+        assert_eq!(app.doc.text(), "");
+        act(&mut app, editor::Action::Undo);
+        assert_eq!(app.doc.text(), "pasted words\n");
+    }
+
+    #[test]
+    fn click_drag_and_double_click_select() {
+        let (mut app, _) = App::boot(None);
+        type_into(&mut app, "hello brave world");
+        act(
+            &mut app,
+            editor::Action::Click {
+                position: 0,
+                extend: false,
+            },
+        );
+        act(&mut app, editor::Action::DragTo { position: 5 });
+        assert_eq!(app.doc.selected_text().as_deref(), Some("hello"));
+
+        act(&mut app, editor::Action::SelectWord { position: 7 });
+        assert_eq!(app.doc.selected_text().as_deref(), Some("brave"));
+    }
+
+    #[test]
+    fn command_routing_reaches_app_keymap() {
+        let (mut app, _) = App::boot(None);
+        let _ = app.update(Message::Editor(editor::Action::Command("y".to_string())));
+        assert!(app.typewriter);
+        let _ = app.update(Message::Editor(editor::Action::Command("g".to_string())));
+        assert!(app.focus_dim);
+        let _ = app.update(Message::Editor(editor::Action::Command("f".to_string())));
+        assert_eq!(app.overlay, Overlay::Find);
     }
 
     #[test]
@@ -1227,59 +1220,11 @@ mod tests {
         let _ = app.update(Message::OverlaySubmit { backwards: true });
         assert_eq!(app.current_match, first);
 
-        // Selection follows the current match in the widget.
-        let selected = app.content.selection().map(|s| s.to_lowercase());
+        // Selection follows the current match in the document.
+        let selected = app.doc.selected_text().map(|s| s.to_lowercase());
         assert_eq!(selected.as_deref(), Some("alpha"));
 
         let _ = app.update(Message::OverlayClose);
         assert_eq!(app.overlay, Overlay::None);
-    }
-
-    fn diff_roundtrip(old: &str, new: &str) {
-        let mut doc = Document::from_str(old);
-        apply_diff(&mut doc, old, new);
-        assert_eq!(doc.text(), new, "old={old:?} new={new:?}");
-    }
-
-    #[test]
-    fn apply_diff_covers_edit_shapes() {
-        diff_roundtrip("", "a");
-        diff_roundtrip("abc", "abxc");
-        diff_roundtrip("abc", "ac");
-        diff_roundtrip("abc", "abc\n");
-        diff_roundtrip("hello world", "hello brave world");
-        diff_roundtrip("aaa", "aa"); // ambiguous repeats
-        diff_roundtrip("café", "cafés");
-        diff_roundtrip("x", "");
-        diff_roundtrip("one two", "one three"); // replace tail word
-    }
-
-    #[test]
-    fn apply_diff_typing_preserves_undo_grouping() {
-        let mut doc = Document::new();
-        let mut text = String::new();
-        for c in "hello world".chars() {
-            let new = format!("{text}{c}");
-            apply_diff(&mut doc, &text, &new);
-            text = new;
-        }
-        doc.undo();
-        assert_eq!(doc.text(), "hello ");
-    }
-
-    #[test]
-    fn position_roundtrip_with_multibyte_lines() {
-        let doc = Document::from_str("café line\nsecond — line\nzz");
-        let buffer = doc.buffer();
-        for char_idx in [0, 3, 4, 9, 10, 12, 18, 24, 26] {
-            let pos = position_of(buffer, char_idx);
-            assert_eq!(
-                char_index_of(buffer, pos),
-                char_idx,
-                "roundtrip at {char_idx}"
-            );
-        }
-        // é is 2 bytes: char 4 (space after café) is at byte column 5
-        assert_eq!(position_of(buffer, 4).column, 5);
     }
 }
