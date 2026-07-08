@@ -803,51 +803,97 @@ impl App {
             }
         };
 
-        let body: Element<'_, Message> = match self.view_mode {
-            ViewMode::Write => editor::EditorView::new(
-                &self.doc,
-                self.text_version,
-                self.overlay == Overlay::None,
-                self.typewriter,
-                self.focus_dim,
-                t,
-                Message::Editor,
-            )
-            .into(),
-            ViewMode::Preview => {
-                let source = self.doc.text();
-                scrollable(container(preview::view(&source, t)).padding(Padding {
-                    top: 4.0,
-                    right: 2.0,
-                    bottom: 220.0,
-                    left: 2.0,
-                }))
-                .id(PREVIEW_SCROLL_ID)
-                .height(Fill)
-                .width(Fill)
-                .into()
-            }
+        let outer_style = move |_: &Theme| container::Style {
+            background: Some(Background::Color(t.bg)),
+            ..container::Style::default()
         };
 
-        // ~62ch at 19px
-        let page = container(column![chrome, body].spacing(26))
-            .max_width(600)
-            .height(Fill);
+        match self.view_mode {
+            ViewMode::Write => {
+                let body: Element<'_, Message> = editor::EditorView::new(
+                    &self.doc,
+                    self.text_version,
+                    self.overlay == Overlay::None,
+                    self.typewriter,
+                    self.focus_dim,
+                    t,
+                    Message::Editor,
+                )
+                .into();
 
-        container(page)
-            .style(move |_| container::Style {
-                background: Some(Background::Color(t.bg)),
-                ..container::Style::default()
-            })
-            .center_x(Fill)
-            .height(Fill)
-            .padding(Padding {
-                top: 76.0,
-                right: 32.0,
-                bottom: 0.0,
-                left: 32.0,
-            })
-            .into()
+                // ~62ch at 19px
+                let page = container(column![chrome, body].spacing(26))
+                    .max_width(600)
+                    .height(Fill);
+
+                container(page)
+                    .style(outer_style)
+                    .center_x(Fill)
+                    .height(Fill)
+                    .padding(Padding {
+                        top: 76.0,
+                        right: 32.0,
+                        bottom: 0.0,
+                        left: 32.0,
+                    })
+                    .into()
+            }
+            ViewMode::Preview => {
+                // The scrollable spans the window (scrollbar at the window
+                // edge, clear of the text); the column centers inside it.
+                let source = self.doc.text();
+                let column_content =
+                    container(preview::view(&source, t))
+                        .max_width(600)
+                        .padding(Padding {
+                            top: 4.0,
+                            right: 2.0,
+                            bottom: 220.0,
+                            left: 2.0,
+                        });
+                let scroll = scrollable(container(column_content).center_x(Fill))
+                    .id(PREVIEW_SCROLL_ID)
+                    .width(Fill)
+                    .height(Fill)
+                    .direction(scrollable::Direction::Vertical(
+                        scrollable::Scrollbar::new()
+                            .width(6)
+                            .margin(4)
+                            .scroller_width(6),
+                    ))
+                    .style(move |theme: &Theme, status| {
+                        let mut style = scrollable::default(theme, status);
+                        style.container = container::Style::default();
+                        style.vertical_rail.background = None;
+                        style.vertical_rail.border = iced::Border::default();
+                        style.vertical_rail.scroller.background = Background::Color(
+                            if matches!(status, scrollable::Status::Active { .. }) {
+                                t.whisper
+                            } else {
+                                t.quiet
+                            },
+                        );
+                        style.vertical_rail.scroller.border = iced::Border {
+                            radius: 3.0.into(),
+                            ..iced::Border::default()
+                        };
+                        style
+                    });
+
+                let top = container(container(chrome).max_width(600)).center_x(Fill);
+                container(column![top, scroll].spacing(26))
+                    .style(outer_style)
+                    .width(Fill)
+                    .height(Fill)
+                    .padding(Padding {
+                        top: 76.0,
+                        right: 8.0,
+                        bottom: 0.0,
+                        left: 8.0,
+                    })
+                    .into()
+            }
+        }
     }
 
     fn chrome_input(&self, placeholder: &str) -> Element<'_, Message> {
