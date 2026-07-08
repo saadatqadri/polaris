@@ -211,17 +211,14 @@ impl App {
     /// Where the chrome fade is heading. Overlays, preview, and status
     /// messages always summon it; zen hides it; typing hides it briefly.
     fn chrome_target(&self) -> f32 {
-        if self.overlay != Overlay::None
+        let summoned = self.overlay != Overlay::None
             || self.view_mode == ViewMode::Preview
-            || self.status.is_some()
-        {
-            1.0
-        } else if self.zen {
-            0.0
-        } else if self
-            .last_key_ms
-            .is_some_and(|t| self.now_ms().saturating_sub(t) < FADE_REST_MS)
-        {
+            || self.status.is_some();
+        let hiding = self.zen
+            || self
+                .last_key_ms
+                .is_some_and(|t| self.now_ms().saturating_sub(t) < FADE_REST_MS);
+        if !summoned && hiding {
             0.0
         } else {
             1.0
