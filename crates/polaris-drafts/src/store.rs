@@ -44,6 +44,9 @@ pub struct DraftStore {
 }
 
 fn sidecar_root(doc_path: &Path) -> io::Result<PathBuf> {
+    // Bare relative names ("draft.md") have an empty parent — anchor to the
+    // working directory so the sidecar still lands next to the file.
+    let doc_path = std::path::absolute(doc_path)?;
     let dir = doc_path
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -238,6 +241,16 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir.join("doc.md")
+    }
+
+    #[test]
+    fn bare_relative_paths_anchor_to_the_working_directory() {
+        // `polaris draft.md` passes a parentless relative path; the store
+        // must still resolve (this was a real bug: Cmd+M showed the
+        // untitled hint on a named file).
+        let store = DraftStore::for_document(Path::new("bare-relative.md")).unwrap();
+        assert!(store.root.is_absolute());
+        assert!(store.root.ends_with(".polaris/bare-relative.md"));
     }
 
     #[test]
