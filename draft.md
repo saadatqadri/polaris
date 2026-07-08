@@ -1,6 +1,6 @@
 # The Factory Is the Wrong Metaphor
 
-The phrase is everywhere now. *Software factory.* Plants humming, lines moving, agents producing artifacts around the clock. It's meant to sound like progress — like we finally industrialized the messy craft of building software. I have a growing repulsion to it, and it took me a while to articulate why.
+The phrase is everywhere now. *Software factory.* It envokes a vision of  plants humming, lines moving, agents producing artifacts around the clock. It's meant to sound like progress — like we finally industrialized the messy craft of building software. I have a growing repulsion to it, and it took me a while to articulate why.
 
 image: 
 
@@ -44,8 +44,7 @@ Selection mode has a brutal prerequisite. To run it, you have to generate     //
 
 Coding agents broke that constraint. Generating a variant is now cheap and fast — minutes, not weeks. The thing that made selection mode economically ruinous just collapsed. For the first time, you can actually afford to build the way an organism builds: vary widely, expose it to the environment, kill almost everything, keep what survives. The metaphor isn't newly *nicer*. It's newly *affordable*.
 
-And velocity is only half of it. The other half is attention. When agents absorb 
-execution, the scarcest human resource stops being the ability to write the code and becomes the judgment to read what comes back — which variant survived contact, what the behavior is telling you, what to kill. We used to spend our attention on production. Now it's freed, and it has to be spent on selection. That isn't a side effect of the shift. That *is* the shift.
+And velocity is only half of it. The other half is attention. When agents absorb execution, the scarcest human resource stops being the ability to write the code and becomes the judgment to read what comes back — which variant survived contact, what the behavior is telling you, what to kill. We used to spend our attention on production. Now it's freed, and it has to be spent on selection. That isn't a side effect of the shift. That *is* the shift.
 
 Which raises the stakes rather than lowering them. Cheap variation also means cheap slop. The old constraint — *can we even afford to build this?* — used to do your culling for you; scarcity was a filter that ran for free. Remove it and nothing gets killed automatically anymore. The bottleneck moved from generation to selection. If your selection loop can't keep pace with what your agents can now produce, you don't get an organism. You get a tumor.
 

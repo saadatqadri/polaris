@@ -200,12 +200,15 @@ from both keyboard and CLI.
 - **Session goals:** optional word-count target with a whisper-quiet progress cue
 
 ### Phase 3 — Drafts (writer-friendly version control)
-Draft's killer feature, local-first: invisible git under `.polaris/` (or the
-user's repo if present). Autosaves commit to a hidden ref; **Ctrl+M "marks a
-draft"** with a name ("Draft 3 — after Sarah's notes"); a drafts browser shows
-named versions with **word-level diffs** and one-key restore. The writer never
-sees git vocabulary. Design doc required before build (data model, merge-free
-linear history, repo-inside-repo handling).
+Draft's killer feature, local-first: the document quietly keeps its own
+history. **Ctrl+M "marks a draft"** with a name ("Draft 3 — after Sarah's
+notes"); a drafts browser shows named versions with **word-level diffs**
+and one-key restore. The writer never sees version-control vocabulary.
+**Design doc: [`docs/DRAFTS.md`](DRAFTS.md)** (2026-07-08) — it revises
+the original "invisible git" sketch to a content-addressed snapshot store
+(no git: linear merge-free history, tiny documents, self-ignoring
+`.polaris/` sidecar), defines the data model, snapshot policy, browser UX,
+and reserves annotation storage per `docs/AI.md`. Awaiting owner approval.
 
 ### Phase 4 — Editing workflow & publish anywhere
 - Import an edited copy → word-level diff → accept/reject each change
