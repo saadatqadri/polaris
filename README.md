@@ -77,6 +77,8 @@ centered page with fixed typography.
 | `Cmd+E` | Hemingway mode — forward only, no deleting |
 | `Cmd+K` | Zen mode — chrome hidden until summoned |
 | `Cmd+L` | Session word goal (a number sets it, empty clears it) |
+| `Cmd+M` | Mark a draft — name this version, kept forever |
+| `Cmd+Shift+M` | Drafts browser (Enter view · Tab flip diff · R restore · Esc) |
 
 ### 4. Configure Notion Integration
 
@@ -239,8 +241,8 @@ system in [`design/DESIGN.md`](design/DESIGN.md) with a typeable mock at
   chrome, smart punctuation
 - [x] **Phase 2** — custom editor widget, focus mode, Hemingway mode, zen
   mode, typewriter scrolling, session goals
-- [ ] **Phase 3** — writer-friendly version control: named draft snapshots and
-  word-level diffs, backed by invisible git
+- [x] **Phase 3** — drafts: named snapshots (kept forever), auto snapshots,
+  word-level diffs, one-key restore — content-addressed store, no git
 - [ ] **Phase 4** — accept/reject editing workflow; more publish targets
   (HTML/PDF, gist, webhook)
 - [ ] **Phase 5** — ship it: signed/notarized `.app`, Homebrew tap, quiet

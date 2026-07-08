@@ -91,6 +91,13 @@ follow the OS again. No theme editor.
 | `Ctrl+K` | Zen (chrome hidden; overlays and status still summon it) |
 | `Ctrl+L` | Session word goal (in-chrome input; whisper-quiet progress) |
 
+## Keyboard map (Phase 3 — drafts)
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+M` | Mark a draft (in-chrome name, prefilled "Draft n") |
+| `Ctrl+Shift+M` | Drafts browser: Up/Down · Enter view · Tab flip diff · R restore · Esc |
+
 ## Implementation notes (iced)
 
 - Fonts load once at startup from embedded bytes; `cosmic-text` (iced's text

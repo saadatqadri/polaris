@@ -62,7 +62,10 @@ pub enum Action {
     Undo,
     Redo,
     /// An unclaimed Cmd/Ctrl+<char> shortcut, for the app's keymap.
-    Command(String),
+    Command {
+        key: String,
+        shift: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -542,7 +545,10 @@ impl<Message> Widget<Message, Theme, Renderer> for EditorView<'_, Message> {
                         Key::Character("v") => {
                             clipboard.read(clipboard::Kind::Standard).map(Action::Paste)
                         }
-                        Key::Character(c) => Some(Action::Command(c.to_string())),
+                        Key::Character(c) => Some(Action::Command {
+                            key: c.to_string(),
+                            shift: modifiers.shift(),
+                        }),
                         _ => None,
                     }
                 } else {

@@ -1,6 +1,6 @@
 # Drafts — writer-friendly version control (Phase 3 design)
 
-> Status: DRAFT — awaiting owner approval before build.
+> Status: APPROVED 2026-07-08 and built the same day (D1–D4). Open\n> questions resolved to the proposed defaults.
 > Required by PLAN §5 Phase 3; annotation storage reserved per docs/AI.md.
 
 ## What it is

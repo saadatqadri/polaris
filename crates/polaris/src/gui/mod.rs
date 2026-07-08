@@ -21,6 +21,7 @@ use iced::{
 };
 
 use polaris_core::{typography, AutosaveTimer, Document};
+use polaris_drafts::{word_diff, DiffKind, DraftStore, Kind as DraftKind};
 
 const CHROME_INPUT_ID: &str = "chrome-input";
 const PREVIEW_SCROLL_ID: &str = "preview-scroll";
@@ -58,12 +59,18 @@ enum Overlay {
     Deploy,
     /// Cmd+L: session word goal — a number sets it, empty clears it.
     Goal,
+    /// Cmd+M: name and mark a draft (docs/DRAFTS.md).
+    Mark,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ViewMode {
     Write,
     Preview,
+    /// The drafts browser (Cmd+Shift+M): named versions + autos.
+    Drafts,
+    /// Viewing one draft with a word-level diff against current.
+    DraftView,
 }
 
 /// A session word goal: progress counts words written since it was set.
@@ -113,6 +120,20 @@ struct App {
     /// Zen mode: chrome hidden until summoned (overlays and status still show).
     zen: bool,
     goal: Option<Goal>,
+    /// The document's snapshot history (None while untitled).
+    store: Option<DraftStore>,
+    /// Selection in the drafts browser (0 = newest).
+    drafts_selected: usize,
+    draft_view: Option<DraftView>,
+}
+
+/// State for viewing one draft against the current text.
+struct DraftView {
+    name: String,
+    text: String,
+    /// false: show the draft (current-only words hidden, draft-only struck);
+    /// true: show current (draft restore would strike the current-only words).
+    flipped: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +152,11 @@ enum Message {
     OverlaySubmit { backwards: bool },
     OverlayClose,
     CloseRequested(iced::window::Id),
+    DraftsNav(i32),
+    DraftsOpenSelected,
+    DraftsFlip,
+    DraftsRestore,
+    DraftsBack,
 }
 
 impl App {
@@ -146,7 +172,7 @@ impl App {
             None => Document::new(),
         };
 
-        let app = Self {
+        let mut app = Self {
             doc,
             text_version: 0,
             dark: detect_dark(),
@@ -170,7 +196,11 @@ impl App {
             hemingway: false,
             zen: false,
             goal: None,
+            store: None,
+            drafts_selected: 0,
+            draft_view: None,
         };
+        app.open_store();
 
         (app, Task::none())
     }
@@ -194,6 +224,12 @@ impl App {
         if self.view_mode == ViewMode::Preview {
             subs.push(event::listen_with(preview_key_events));
         }
+        if self.view_mode == ViewMode::Drafts {
+            subs.push(event::listen_with(drafts_list_key_events));
+        }
+        if self.view_mode == ViewMode::DraftView {
+            subs.push(event::listen_with(draft_view_key_events));
+        }
         subs.push(iced::window::close_requests().map(Message::CloseRequested));
         // Fade animation ticks: while not at the target or typing recently.
         let recently_typed = self
@@ -209,7 +245,7 @@ impl App {
     /// messages always summon it; zen hides it; typing hides it briefly.
     fn chrome_target(&self) -> f32 {
         let summoned = self.overlay != Overlay::None
-            || self.view_mode == ViewMode::Preview
+            || self.view_mode != ViewMode::Write
             || self.status.is_some();
         let hiding = self.zen
             || self
@@ -233,6 +269,27 @@ impl App {
 
     fn now_ms(&self) -> u64 {
         self.epoch.elapsed().as_millis() as u64
+    }
+
+    /// Wall-clock unix millis, for the drafts store (display needs real dates).
+    fn unix_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
+    }
+
+    /// (Re)open the snapshot store for the current path: prune, then take
+    /// the file-open baseline auto (skipped if nothing changed).
+    fn open_store(&mut self) {
+        self.store = None;
+        let Some(path) = self.doc.path() else { return };
+        if let Ok(mut store) = DraftStore::for_document(path) {
+            let now = Self::unix_ms();
+            let _ = store.prune(now);
+            let _ = store.snapshot(&self.doc.text(), DraftKind::Auto, None, now);
+            self.store = Some(store);
+        }
     }
 
     /// Bookkeeping after any text mutation.
@@ -280,6 +337,8 @@ impl App {
                     self.view_mode = ViewMode::Write;
                     Task::none()
                 }
+                // Preview toggle is inert in the drafts views.
+                ViewMode::Drafts | ViewMode::DraftView => Task::none(),
             },
             Message::Save => {
                 if self.doc.path().is_none() {
@@ -295,6 +354,12 @@ impl App {
                     && self.autosave.should_save(self.now_ms())
                 {
                     self.save_now();
+                    let now = Self::unix_ms();
+                    if let Some(store) = &mut self.store {
+                        if store.should_auto_snapshot(now) {
+                            let _ = store.snapshot(&self.doc.text(), DraftKind::Auto, None, now);
+                        }
+                    }
                 }
                 Task::none()
             }
@@ -396,6 +461,7 @@ impl App {
                         Ok(()) => {
                             self.autosave.saved();
                             self.status = None;
+                            self.open_store();
                             self.close_overlay()
                         }
                         Err(e) => {
@@ -422,8 +488,13 @@ impl App {
                             .map(|dir| dir.join(&name))
                             .unwrap_or(target)
                     };
+                    let old_path = self.doc.path().map(|p| p.to_path_buf());
                     match self.doc.rename(target) {
                         Ok(()) => {
+                            if let (Some(old), Some(new)) = (old_path, self.doc.path()) {
+                                let _ = DraftStore::migrate(&old, new);
+                            }
+                            self.open_store();
                             self.status = None;
                             self.close_overlay()
                         }
@@ -432,6 +503,32 @@ impl App {
                             Task::none()
                         }
                     }
+                }
+                Overlay::Mark => {
+                    let name = self.input.trim().to_string();
+                    if name.is_empty() {
+                        return Task::none();
+                    }
+                    self.save_now();
+                    if let Some(store) = &mut self.store {
+                        match store.snapshot(
+                            &self.doc.text(),
+                            DraftKind::Marked,
+                            Some(name),
+                            Self::unix_ms(),
+                        ) {
+                            Ok(_) => {
+                                let task = self.close_overlay();
+                                self.status = Some("· draft marked".to_string());
+                                return task;
+                            }
+                            Err(e) => {
+                                self.status = Some(format!("mark failed: {e}"));
+                                return Task::none();
+                            }
+                        }
+                    }
+                    Task::none()
                 }
                 Overlay::Goal => {
                     let value = self.input.trim().to_string();
@@ -480,6 +577,70 @@ impl App {
                 Overlay::None => Task::none(),
             },
             Message::OverlayClose => self.close_overlay(),
+            Message::DraftsNav(delta) => {
+                let len = self.store.as_ref().map(|s| s.entries().len()).unwrap_or(0);
+                if len > 0 {
+                    let cur = self.drafts_selected as i32 + delta;
+                    self.drafts_selected = cur.clamp(0, len as i32 - 1) as usize;
+                }
+                Task::none()
+            }
+            Message::DraftsOpenSelected => {
+                if let Some(store) = &self.store {
+                    let entries: Vec<_> = store.entries().iter().rev().collect();
+                    if let Some(entry) = entries.get(self.drafts_selected) {
+                        if let Ok(text) = store.load(entry) {
+                            self.draft_view = Some(DraftView {
+                                name: entry
+                                    .name
+                                    .clone()
+                                    .unwrap_or_else(|| "auto snapshot".to_string()),
+                                text,
+                                flipped: false,
+                            });
+                            self.view_mode = ViewMode::DraftView;
+                        }
+                    }
+                }
+                Task::none()
+            }
+            Message::DraftsFlip => {
+                if let Some(view) = &mut self.draft_view {
+                    view.flipped = !view.flipped;
+                }
+                Task::none()
+            }
+            Message::DraftsRestore => {
+                if let Some(view) = self.draft_view.take() {
+                    // Restore can never lose words: snapshot current first.
+                    if let Some(store) = &mut self.store {
+                        let _ = store.snapshot(
+                            &self.doc.text(),
+                            DraftKind::Auto,
+                            None,
+                            Self::unix_ms(),
+                        );
+                    }
+                    // One atomic undo group: select-all + insert.
+                    self.doc.select_all();
+                    self.doc.insert_str(&view.text);
+                    self.pending_revert = None;
+                    self.note_edit();
+                    self.view_mode = ViewMode::Write;
+                    self.status = Some("restored — Cmd+Z undoes".to_string());
+                }
+                Task::none()
+            }
+            Message::DraftsBack => {
+                self.view_mode = match self.view_mode {
+                    ViewMode::DraftView => {
+                        self.draft_view = None;
+                        ViewMode::Drafts
+                    }
+                    _ => ViewMode::Write,
+                };
+                Task::none()
+            }
             Message::CloseRequested(id) => {
                 if self.doc.path().is_some() {
                     if self.doc.is_dirty() {
@@ -582,15 +743,32 @@ impl App {
                     self.note_edit();
                 }
             }
-            A::Command(key) => return self.on_command(&key),
+            A::Command { key, shift } => return self.on_command(&key, shift),
         }
         Task::none()
     }
 
     /// The app-level keymap, reached through the editor widget's unclaimed
     /// Cmd/Ctrl shortcuts.
-    fn on_command(&mut self, key: &str) -> Task<Message> {
+    fn on_command(&mut self, key: &str, shift: bool) -> Task<Message> {
         match key {
+            "m" if shift => {
+                if self.store.is_some() {
+                    self.drafts_selected = 0;
+                    self.view_mode = ViewMode::Drafts;
+                } else {
+                    self.status = Some("save the file to start keeping drafts".to_string());
+                }
+                Task::none()
+            }
+            "m" => {
+                if self.store.is_some() {
+                    self.open_overlay(Overlay::Mark)
+                } else {
+                    self.status = Some("save the file to start keeping drafts".to_string());
+                    Task::none()
+                }
+            }
             "s" => self.update(Message::Save),
             "f" => self.update(Message::FindOpen),
             "r" => self.update(Message::RenameOpen),
@@ -665,6 +843,10 @@ impl App {
             Overlay::Goal => {
                 self.input = self.goal.map(|g| g.target.to_string()).unwrap_or_default();
             }
+            Overlay::Mark => {
+                let n = self.store.as_ref().map(|s| s.marked_count()).unwrap_or(0);
+                self.input = format!("Draft {}", n + 1);
+            }
             // Deploy has no input; Enter/Esc arrive via the overlay
             // subscription, so the missing-id focus below is a no-op.
             Overlay::Deploy | Overlay::None => {}
@@ -730,6 +912,17 @@ impl App {
                         if self.view_mode == ViewMode::Preview {
                             parts.push("preview".to_string());
                         }
+                        if self.view_mode == ViewMode::Drafts {
+                            parts.push("drafts · Enter view · Esc back".to_string());
+                        }
+                        if self.view_mode == ViewMode::DraftView {
+                            if let Some(view) = &self.draft_view {
+                                parts.push(format!(
+                                    "{} · R restore · Tab flip · Esc back",
+                                    view.name
+                                ));
+                            }
+                        }
                         if self.typewriter {
                             parts.push("typewriter".to_string());
                         }
@@ -783,6 +976,12 @@ impl App {
             ]
             .spacing(12)
             .into(),
+            Overlay::Mark => row![
+                quiet_text("mark draft".to_string()),
+                self.chrome_input("a name for this version"),
+            ]
+            .spacing(12)
+            .into(),
             Overlay::Deploy => {
                 let page = self.deploy_page.as_deref().unwrap_or("?");
                 let short: String = page.chars().take(8).collect();
@@ -806,6 +1005,36 @@ impl App {
         };
 
         match self.view_mode {
+            ViewMode::Drafts => {
+                let list = self.drafts_list_view(t);
+                let top = container(container(chrome).max_width(600)).center_x(Fill);
+                container(column![top, list].spacing(26))
+                    .style(outer_style)
+                    .width(Fill)
+                    .height(Fill)
+                    .padding(Padding {
+                        top: 76.0,
+                        right: 8.0,
+                        bottom: 0.0,
+                        left: 8.0,
+                    })
+                    .into()
+            }
+            ViewMode::DraftView => {
+                let body = self.draft_view_body(t);
+                let top = container(container(chrome).max_width(600)).center_x(Fill);
+                container(column![top, body].spacing(26))
+                    .style(outer_style)
+                    .width(Fill)
+                    .height(Fill)
+                    .padding(Padding {
+                        top: 76.0,
+                        right: 8.0,
+                        bottom: 0.0,
+                        left: 8.0,
+                    })
+                    .into()
+            }
             ViewMode::Write => {
                 let body: Element<'_, Message> = editor::EditorView::new(
                     &self.doc,
@@ -910,6 +1139,176 @@ impl App {
                 selection: iced::Color { a: 0.35, ..t.star },
             })
             .into()
+    }
+}
+
+impl App {
+    /// The drafts browser: newest first, marked drafts prominent.
+    fn drafts_list_view(&self, t: theme::Tokens) -> Element<'_, Message> {
+        let now = Self::unix_ms();
+        let Some(store) = &self.store else {
+            return container(text("no drafts yet").color(t.quiet)).into();
+        };
+        let entries: Vec<_> = store.entries().iter().rev().collect();
+        if entries.is_empty() {
+            return container(
+                text("no drafts yet — Cmd+M marks one")
+                    .font(fonts::MONO)
+                    .size(13)
+                    .color(t.quiet),
+            )
+            .center_x(Fill)
+            .into();
+        }
+
+        let mut rows: Vec<Element<'_, Message>> = Vec::new();
+        for (i, entry) in entries.iter().enumerate() {
+            let selected = i == self.drafts_selected;
+            let marker: Element<'_, Message> = if selected {
+                text("▍").color(t.star).size(16).into()
+            } else {
+                space().width(12).into()
+            };
+            let name: Element<'_, Message> = match entry.kind {
+                polaris_drafts::Kind::Marked => {
+                    text(entry.name.clone().unwrap_or_else(|| "draft".to_string()))
+                        .font(iced::Font {
+                            weight: iced::font::Weight::Semibold,
+                            ..fonts::WRITING
+                        })
+                        .size(17)
+                        .color(t.ink)
+                        .into()
+                }
+                polaris_drafts::Kind::Auto => text("auto snapshot").size(15).color(t.quiet).into(),
+            };
+            // Delta vs the previous entry (chronological), per DRAFTS.md.
+            let idx = entries.len() - 1 - i;
+            let delta = if idx > 0 {
+                let prev = store.entries()[idx - 1].words as i64;
+                let d = entry.words as i64 - prev;
+                if d != 0 {
+                    format!(" · {}{d}", if d > 0 { "+" } else { "" })
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+            let meta = text(format!(
+                "{} · {} words{delta}",
+                ago(now, entry.created_ms),
+                entry.words
+            ))
+            .font(fonts::MONO)
+            .size(12)
+            .color(t.quiet);
+
+            rows.push(
+                row![marker, name, space().width(Fill), meta]
+                    .spacing(10)
+                    .into(),
+            );
+        }
+
+        let list = container(column(rows).spacing(14)).max_width(600);
+        scrollable(container(list).center_x(Fill))
+            .width(Fill)
+            .height(Fill)
+            .into()
+    }
+
+    /// One draft, word-diffed against the current text.
+    fn draft_view_body(&self, t: theme::Tokens) -> Element<'_, Message> {
+        let Some(view) = &self.draft_view else {
+            return space().into();
+        };
+        let current = self.doc.text();
+        let spans = word_diff(&view.text, &current);
+        let mut rich: Vec<iced::widget::text::Span<'_>> = Vec::new();
+        for span in &spans {
+            match (span.kind, view.flipped) {
+                (DiffKind::Equal, _) => {
+                    rich.push(iced::widget::text::Span::new(span.text.clone()));
+                }
+                // Viewing the draft: draft-only words struck in quiet.
+                (DiffKind::Removed, false) => rich.push(
+                    iced::widget::text::Span::new(span.text.clone())
+                        .color(t.quiet)
+                        .strikethrough(true),
+                ),
+                // Flipped (viewing current): what a restore would remove.
+                (DiffKind::Added, true) => rich.push(
+                    iced::widget::text::Span::new(span.text.clone())
+                        .color(t.quiet)
+                        .strikethrough(true),
+                ),
+                _ => {}
+            }
+        }
+        let body = iced::widget::rich_text(rich)
+            .font(fonts::WRITING)
+            .size(19)
+            .line_height(text::LineHeight::Relative(1.56))
+            .color(t.ink);
+        let column_content = container(body).max_width(600).padding(Padding {
+            top: 4.0,
+            right: 2.0,
+            bottom: 220.0,
+            left: 2.0,
+        });
+        scrollable(container(column_content).center_x(Fill))
+            .width(Fill)
+            .height(Fill)
+            .into()
+    }
+}
+
+/// "just now" / "5 min ago" / "3 h ago" / "2 days ago".
+fn ago(now_ms: u64, then_ms: u64) -> String {
+    let secs = now_ms.saturating_sub(then_ms) / 1000;
+    match secs {
+        0..=59 => "just now".to_string(),
+        60..=3599 => format!("{} min ago", secs / 60),
+        3600..=86_399 => format!("{} h ago", secs / 3600),
+        _ => format!("{} days ago", secs / 86_400),
+    }
+}
+
+/// Up/Down/Enter/Esc in the drafts browser.
+fn drafts_list_key_events(
+    event: iced::Event,
+    _status: event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
+        match key.as_ref() {
+            keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Some(Message::DraftsNav(-1)),
+            keyboard::Key::Named(keyboard::key::Named::ArrowDown) => Some(Message::DraftsNav(1)),
+            keyboard::Key::Named(keyboard::key::Named::Enter) => Some(Message::DraftsOpenSelected),
+            keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::DraftsBack),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
+/// R restore / Tab flip / Esc back while viewing a draft.
+fn draft_view_key_events(
+    event: iced::Event,
+    _status: event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
+        match key.as_ref() {
+            keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::DraftsBack),
+            keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::DraftsFlip),
+            keyboard::Key::Character("r") => Some(Message::DraftsRestore),
+            _ => None,
+        }
+    } else {
+        None
     }
 }
 
@@ -1128,11 +1527,20 @@ mod tests {
     #[test]
     fn command_routing_reaches_app_keymap() {
         let (mut app, _) = App::boot(None);
-        let _ = app.update(Message::Editor(editor::Action::Command("y".to_string())));
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "y".to_string(),
+            shift: false,
+        }));
         assert!(app.typewriter);
-        let _ = app.update(Message::Editor(editor::Action::Command("g".to_string())));
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "g".to_string(),
+            shift: false,
+        }));
         assert!(app.focus_dim);
-        let _ = app.update(Message::Editor(editor::Action::Command("f".to_string())));
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "f".to_string(),
+            shift: false,
+        }));
         assert_eq!(app.overlay, Overlay::Find);
     }
 
@@ -1140,7 +1548,10 @@ mod tests {
     fn hemingway_mode_is_forward_only() {
         let (mut app, _) = App::boot(None);
         type_into(&mut app, "first draft");
-        let _ = app.update(Message::Editor(editor::Action::Command("e".to_string())));
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "e".to_string(),
+            shift: false,
+        }));
         assert!(app.hemingway);
 
         act(&mut app, editor::Action::Backspace);
@@ -1152,7 +1563,10 @@ mod tests {
         type_into(&mut app, " continues");
         assert!(app.doc.text().contains("continues"), "typing still works");
 
-        let _ = app.update(Message::Editor(editor::Action::Command("e".to_string())));
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "e".to_string(),
+            shift: false,
+        }));
         act(&mut app, editor::Action::Backspace);
         assert!(!app.doc.text().contains("continues s"), "deletion restored");
     }
@@ -1160,7 +1574,10 @@ mod tests {
     #[test]
     fn zen_hides_chrome_but_status_and_overlays_summon_it() {
         let (mut app, _) = App::boot(None);
-        let _ = app.update(Message::Editor(editor::Action::Command("k".to_string())));
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "k".to_string(),
+            shift: false,
+        }));
         assert!(app.zen);
         for _ in 0..40 {
             let _ = app.update(Message::FadeTick);
@@ -1182,7 +1599,10 @@ mod tests {
     fn session_goal_sets_counts_and_clears() {
         let (mut app, _) = App::boot(None);
         type_into(&mut app, "one two three");
-        let _ = app.update(Message::Editor(editor::Action::Command("l".to_string())));
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "l".to_string(),
+            shift: false,
+        }));
         assert_eq!(app.overlay, Overlay::Goal);
         let _ = app.update(Message::OverlayInput("5".to_string()));
         let _ = app.update(Message::OverlaySubmit { backwards: false });
@@ -1190,7 +1610,10 @@ mod tests {
         assert_eq!((goal.target, goal.baseline), (5, 3));
 
         // Non-numeric input keeps the overlay open with a hint.
-        let _ = app.update(Message::Editor(editor::Action::Command("l".to_string())));
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "l".to_string(),
+            shift: false,
+        }));
         assert_eq!(app.input, "5", "prefilled with the current target");
         let _ = app.update(Message::OverlayInput("soon".to_string()));
         let _ = app.update(Message::OverlaySubmit { backwards: false });
@@ -1379,6 +1802,96 @@ mod tests {
             .unwrap_or("")
             .contains("deploy failed"));
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn mark_browse_and_restore_a_draft() {
+        let dir = std::env::temp_dir().join("polaris-gui-drafts");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("novel.md");
+        std::fs::write(&path, "chapter one\n").unwrap();
+
+        let (mut app, _) = App::boot(Some(path.clone()));
+        assert!(app.store.is_some(), "store opens with the document");
+
+        // Mark a draft (Cmd+M -> prefilled overlay -> Enter).
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "m".to_string(),
+            shift: false,
+        }));
+        assert_eq!(app.overlay, Overlay::Mark);
+        assert_eq!(app.input, "Draft 1", "prefilled");
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+        assert_eq!(app.overlay, Overlay::None);
+        assert!(app.status.as_deref().unwrap_or("").contains("draft marked"));
+
+        // Write more, then open the browser (Cmd+Shift+M).
+        type_into(&mut app, "and then some more words ");
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "m".to_string(),
+            shift: true,
+        }));
+        assert_eq!(app.view_mode, ViewMode::Drafts);
+
+        // Newest first; navigate to the marked draft and view it.
+        let entries = app.store.as_ref().unwrap().entries().len();
+        assert!(entries >= 2, "baseline auto + marked draft");
+        let _ = app.update(Message::DraftsNav(1));
+        let _ = app.update(Message::DraftsOpenSelected);
+        assert_eq!(app.view_mode, ViewMode::DraftView);
+
+        // Restore: current text snapshotted first, replace is undoable.
+        let before_restore = app.doc.text();
+        let _ = app.update(Message::DraftsRestore);
+        assert_eq!(app.view_mode, ViewMode::Write);
+        assert_ne!(app.doc.text(), before_restore, "content replaced");
+        act(&mut app, editor::Action::Undo);
+        assert_eq!(app.doc.text(), before_restore, "restore is one undo");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn marking_untitled_hints_instead() {
+        let (mut app, _) = App::boot(None);
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "m".to_string(),
+            shift: false,
+        }));
+        assert_eq!(app.overlay, Overlay::None);
+        assert!(app.status.as_deref().unwrap_or("").contains("save"));
+    }
+
+    #[test]
+    fn rename_migrates_draft_history() {
+        let dir = std::env::temp_dir().join("polaris-gui-migrate");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let old = dir.join("before.md");
+        std::fs::write(&old, "words\n").unwrap();
+
+        let (mut app, _) = App::boot(Some(old.clone()));
+        let _ = app.update(Message::Editor(editor::Action::Command {
+            key: "m".to_string(),
+            shift: false,
+        }));
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+
+        let _ = app.update(Message::RenameOpen);
+        let _ = app.update(Message::OverlayInput("after.md".to_string()));
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+
+        let store = app.store.as_ref().unwrap();
+        assert!(
+            store
+                .entries()
+                .iter()
+                .any(|e| e.name.as_deref() == Some("Draft 1")),
+            "history followed the rename"
+        );
+        assert!(dir.join(".polaris/after.md").exists());
+        assert!(!dir.join(".polaris/before.md").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

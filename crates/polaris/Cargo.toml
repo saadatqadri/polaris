@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 polaris-core = { path = "../polaris-core" }
+polaris-drafts = { path = "../polaris-drafts" }
 polaris-notion = { path = "../polaris-notion" }
 
 anyhow.workspace = true

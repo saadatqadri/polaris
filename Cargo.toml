@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/polaris-core",
+    "crates/polaris-drafts",
     "crates/polaris-notion",
     "crates/polaris",
 ]

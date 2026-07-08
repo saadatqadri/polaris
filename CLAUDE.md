@@ -99,8 +99,15 @@ this file is only the condensed handover summary.
   goals (Cmd+L, in-chrome input, counts words since set, quiet ✓ when
   met). All session flags — no persistence, no settings, per DESIGN.
   Typewriter hold (45%) awaits feel-tuning from real use.
-- **Phase 3:** writer-friendly version control ("mark draft" snapshots, named
-  versions, word-level diffs) backed by invisible git.
+- **Phase 3 — landed 2026-07-08 (pending hands-on):** drafts per
+  docs/DRAFTS.md — polaris-drafts crate (content-addressed zstd snapshots,
+  linear manifest, no git; .polaris/ sidecar self-ignores). Cmd+M marks
+  (prefilled overlay, kept forever), autos ride the autosave path (10-min
+  cadence + file-open baseline, pruned 50/7d), Cmd+Shift+M browser
+  (newest-first, word deltas), Enter views with word-level diff (draft-only
+  words struck in quiet; Tab flips direction), R restores (snapshots
+  current first; one undo group). Rename migrates history. notes/ dir
+  reserved for Phase 4 AI annotations.
 - **Phase 4:** accept/reject editing workflow; more publish targets (HTML/PDF,
   gist, webhook).
 - **Phase 5:** ship it — signing/notarization, .app bundle, Homebrew tap,
