@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "polaris")]
+#[command(name = "polaris", version)]
 #[command(about = "A local-first markdown editor with Notion deployment", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
