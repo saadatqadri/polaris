@@ -19,6 +19,10 @@ fn main() -> Result<()> {
     match cli.command {
         Some(Commands::Gui { file }) => run_gui(file),
 
+        Some(Commands::Welcome) => {
+            gui::run_welcome().map_err(|e| anyhow::anyhow!("GUI failed: {e}"))
+        }
+
         Some(Commands::New { filename }) => {
             let path = PathBuf::from(&filename);
             if path.exists() {
@@ -49,7 +53,9 @@ async fn run_command(command: Commands) -> Result<()> {
             default_page,
         } => configure(token, default_page),
 
-        Commands::Gui { .. } | Commands::New { .. } => unreachable!("handled in main"),
+        Commands::Gui { .. } | Commands::Welcome | Commands::New { .. } => {
+            unreachable!("handled in main")
+        }
     }
 }
 

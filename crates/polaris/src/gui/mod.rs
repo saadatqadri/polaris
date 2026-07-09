@@ -10,6 +10,7 @@ mod editor;
 mod fonts;
 mod preview;
 mod theme;
+mod welcome;
 
 use std::ops::Range;
 use std::path::PathBuf;
@@ -34,20 +35,33 @@ const FADE_IN_SECS: f32 = 0.3;
 const FADE_REST_MS: u64 = 1200;
 
 pub fn run(path: Option<PathBuf>) -> iced::Result {
-    iced::application(move || App::boot(path.clone()), App::update, App::view)
-        .title(App::title)
-        .theme(App::theme)
-        .subscription(App::subscription)
-        .font(fonts::WRITING_REGULAR_BYTES)
-        .font(fonts::WRITING_ITALIC_BYTES)
-        .font(fonts::WRITING_SEMIBOLD_BYTES)
-        .font(fonts::MONO_REGULAR_BYTES)
-        .default_font(fonts::WRITING)
-        .window_size(iced::Size::new(760.0, 940.0))
-        // Close requests route through update() so the buffer is flushed
-        // before exit (see Message::CloseRequested).
-        .exit_on_close_request(false)
-        .run()
+    run_with(path, false)
+}
+
+/// `polaris welcome`: reopen the tour regardless of the first-run flag.
+pub fn run_welcome() -> iced::Result {
+    run_with(None, true)
+}
+
+fn run_with(path: Option<PathBuf>, force_welcome: bool) -> iced::Result {
+    iced::application(
+        move || App::boot(path.clone(), force_welcome),
+        App::update,
+        App::view,
+    )
+    .title(App::title)
+    .theme(App::theme)
+    .subscription(App::subscription)
+    .font(fonts::WRITING_REGULAR_BYTES)
+    .font(fonts::WRITING_ITALIC_BYTES)
+    .font(fonts::WRITING_SEMIBOLD_BYTES)
+    .font(fonts::MONO_REGULAR_BYTES)
+    .default_font(fonts::WRITING)
+    .window_size(iced::Size::new(760.0, 940.0))
+    // Close requests route through update() so the buffer is flushed
+    // before exit (see Message::CloseRequested).
+    .exit_on_close_request(false)
+    .run()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,7 +182,15 @@ enum Message {
 }
 
 impl App {
-    fn boot(path: Option<PathBuf>) -> (Self, Task<Message>) {
+    fn boot(path: Option<PathBuf>, force_welcome: bool) -> (Self, Task<Message>) {
+        // First-ever bare launch (or `polaris welcome`): open the tour as
+        // the untitled buffer. Tests never see it (cfg gate).
+        let first_run = !cfg!(test)
+            && path.is_none()
+            && (force_welcome
+                || !crate::config::Config::load()
+                    .map(|c| c.onboarded)
+                    .unwrap_or(true));
         let doc = match &path {
             // Readability is pre-checked in the CLI before `run`.
             Some(p) if p.exists() => Document::open(p).expect("file readable"),
@@ -177,6 +199,7 @@ impl App {
                 doc.save_as(p).expect("file creatable");
                 doc
             }
+            None if first_run => Document::from_str(welcome::WELCOME),
             None => Document::new(),
         };
 
@@ -209,6 +232,15 @@ impl App {
             draft_view: None,
         };
         app.open_store();
+        if first_run {
+            // The tour is a sample, not user content: one close discards it.
+            app.close_pending = true;
+            if !force_welcome && !cfg!(test) {
+                let mut config = crate::config::Config::load().unwrap_or_default();
+                config.onboarded = true;
+                let _ = config.save();
+            }
+        }
 
         (app, Task::none())
     }
@@ -1463,7 +1495,7 @@ mod tests {
         let path = dir.join("autosave.md");
         std::fs::write(&path, "start\n").unwrap();
 
-        let (mut app, _) = App::boot(Some(path.clone()));
+        let (mut app, _) = App::boot(Some(path.clone()), false);
         type_into(&mut app, "more words ");
 
         // Before the debounce window: tick must not save.
@@ -1492,7 +1524,7 @@ mod tests {
         let path = dir.join("untitled-save.md");
         let _ = std::fs::remove_file(&path);
 
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "draft one");
         let _ = app.update(Message::Save); // untitled -> opens save-as
         assert_eq!(app.overlay, Overlay::SaveAs);
@@ -1507,7 +1539,7 @@ mod tests {
 
     #[test]
     fn smart_punctuation_applies_on_input() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "wait -- \"really\" it's...");
         assert_eq!(
             app.doc.text(),
@@ -1517,7 +1549,7 @@ mod tests {
 
     #[test]
     fn smart_punctuation_skipped_in_code_contexts() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(
             &mut app,
             "```\n--verbose \"flag\"\n```\nand `--inline \"x\"` here",
@@ -1532,7 +1564,7 @@ mod tests {
 
     #[test]
     fn backspace_right_after_substitution_reverts_to_literal() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "a--");
         assert!(app.doc.text().starts_with("a\u{2014}"));
         act(&mut app, editor::Action::Backspace);
@@ -1544,7 +1576,7 @@ mod tests {
 
     #[test]
     fn markdown_rule_stays_typeable() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "text\n\n---");
         assert!(
             app.doc.text().contains("\n---"),
@@ -1554,7 +1586,7 @@ mod tests {
 
     #[test]
     fn paste_and_cut_roundtrip_through_core() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         act(
             &mut app,
             editor::Action::Paste("pasted words\n".to_string()),
@@ -1569,7 +1601,7 @@ mod tests {
 
     #[test]
     fn click_drag_and_double_click_select() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "hello brave world");
         act(
             &mut app,
@@ -1587,7 +1619,7 @@ mod tests {
 
     #[test]
     fn command_routing_reaches_app_keymap() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         let _ = app.update(Message::Editor(editor::Action::Command {
             key: "y".to_string(),
             shift: false,
@@ -1607,7 +1639,7 @@ mod tests {
 
     #[test]
     fn hemingway_mode_is_forward_only() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "first draft");
         let _ = app.update(Message::Editor(editor::Action::Command {
             key: "e".to_string(),
@@ -1634,7 +1666,7 @@ mod tests {
 
     #[test]
     fn zen_hides_chrome_but_status_and_overlays_summon_it() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         let _ = app.update(Message::Editor(editor::Action::Command {
             key: "k".to_string(),
             shift: false,
@@ -1658,7 +1690,7 @@ mod tests {
 
     #[test]
     fn session_goal_sets_counts_and_clears() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "one two three");
         let _ = app.update(Message::Editor(editor::Action::Command {
             key: "l".to_string(),
@@ -1690,7 +1722,7 @@ mod tests {
 
     #[test]
     fn preview_toggles_and_chrome_returns() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "# Title\n\nsome *styled* text");
         assert_eq!(app.view_mode, ViewMode::Write);
         let _ = app.update(Message::TogglePreview);
@@ -1705,7 +1737,7 @@ mod tests {
 
     #[test]
     fn typing_fades_chrome_and_rest_restores_it() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "x");
         for _ in 0..30 {
             let _ = app.update(Message::FadeTick);
@@ -1725,7 +1757,7 @@ mod tests {
         let path = dir.join("close-flush.md");
         std::fs::write(&path, "start\n").unwrap();
 
-        let (mut app, _) = App::boot(Some(path.clone()));
+        let (mut app, _) = App::boot(Some(path.clone()), false);
         type_into(&mut app, "last-second words ");
         assert!(app.doc.is_dirty());
         let _ = app.update(Message::CloseRequested(iced::window::Id::unique()));
@@ -1738,7 +1770,7 @@ mod tests {
 
     #[test]
     fn close_request_on_untitled_content_warns_once() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "not yet saved");
         let id = iced::window::Id::unique();
         let _ = app.update(Message::CloseRequested(id));
@@ -1748,7 +1780,7 @@ mod tests {
         type_into(&mut app, " more");
         assert!(!app.close_pending);
         // Empty untitled buffers close without ceremony.
-        let (mut empty, _) = App::boot(None);
+        let (mut empty, _) = App::boot(None, false);
         let _ = empty.update(Message::CloseRequested(id));
         assert_eq!(empty.overlay, Overlay::None);
         assert!(!empty.close_pending);
@@ -1763,7 +1795,7 @@ mod tests {
         let _ = std::fs::remove_file(&new);
         std::fs::write(&old, "words\n").unwrap();
 
-        let (mut app, _) = App::boot(Some(old.clone()));
+        let (mut app, _) = App::boot(Some(old.clone()), false);
         let _ = app.update(Message::RenameOpen);
         assert_eq!(app.overlay, Overlay::Rename);
         assert_eq!(app.input, "chapter-one.md", "prefilled with current name");
@@ -1787,7 +1819,7 @@ mod tests {
         std::fs::write(&a, "a\n").unwrap();
         std::fs::write(&b, "precious\n").unwrap();
 
-        let (mut app, _) = App::boot(Some(a.clone()));
+        let (mut app, _) = App::boot(Some(a.clone()), false);
         let _ = app.update(Message::RenameOpen);
         let _ = app.update(Message::OverlayInput("gui-refuse-b.md".to_string()));
         let _ = app.update(Message::OverlaySubmit { backwards: false });
@@ -1804,14 +1836,14 @@ mod tests {
 
     #[test]
     fn rename_on_untitled_opens_save_as() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         let _ = app.update(Message::RenameOpen);
         assert_eq!(app.overlay, Overlay::SaveAs);
     }
 
     #[test]
     fn theme_toggle_flips_and_works_in_preview_too() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         let initial = app.dark;
         let _ = app.update(Message::ToggleTheme);
         assert_eq!(app.dark, !initial);
@@ -1822,7 +1854,7 @@ mod tests {
 
     #[test]
     fn deploy_requires_a_saved_file() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         let _ = app.update(Message::DeployOpen);
         assert_eq!(app.overlay, Overlay::None);
         assert!(app.status.as_deref().unwrap_or("").contains("save"));
@@ -1835,7 +1867,7 @@ mod tests {
         let path = dir.join("deploy.md");
         std::fs::write(&path, "content\n").unwrap();
 
-        let (mut app, _) = App::boot(Some(path.clone()));
+        let (mut app, _) = App::boot(Some(path.clone()), false);
         type_into(&mut app, "更 ");
         // Simulate a configured deploy confirmation (bypasses Config::load).
         app.deploy_token = Some("secret".into());
@@ -1873,7 +1905,7 @@ mod tests {
         let path = dir.join("novel.md");
         std::fs::write(&path, "chapter one\n").unwrap();
 
-        let (mut app, _) = App::boot(Some(path.clone()));
+        let (mut app, _) = App::boot(Some(path.clone()), false);
         assert!(app.store.is_some(), "store opens with the document");
 
         // Mark a draft (Cmd+M -> prefilled overlay -> Enter).
@@ -1914,7 +1946,7 @@ mod tests {
 
     #[test]
     fn marking_untitled_hints_instead() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         let _ = app.update(Message::Editor(editor::Action::Command {
             key: "m".to_string(),
             shift: false,
@@ -1931,7 +1963,7 @@ mod tests {
         let old = dir.join("before.md");
         std::fs::write(&old, "words\n").unwrap();
 
-        let (mut app, _) = App::boot(Some(old.clone()));
+        let (mut app, _) = App::boot(Some(old.clone()), false);
         let _ = app.update(Message::Editor(editor::Action::Command {
             key: "m".to_string(),
             shift: false,
@@ -1956,8 +1988,33 @@ mod tests {
     }
 
     #[test]
+    fn welcome_tour_mentions_every_binding() {
+        for key in [
+            "Cmd+P",
+            "Cmd+F",
+            "Cmd+S",
+            "Cmd+R",
+            "Cmd+T",
+            "Cmd+Z",
+            "Cmd+Y",
+            "Cmd+G",
+            "Cmd+E",
+            "Cmd+K",
+            "Cmd+L",
+            "Cmd+M",
+            "Cmd+Shift+M",
+            "Cmd+D",
+        ] {
+            assert!(
+                super::welcome::WELCOME.contains(key),
+                "welcome tour is missing {key}"
+            );
+        }
+    }
+
+    #[test]
     fn find_overlay_matches_and_cycles() {
-        let (mut app, _) = App::boot(None);
+        let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "alpha beta alpha gamma Alpha");
         let _ = app.update(Message::FindOpen);
         let _ = app.update(Message::OverlayInput("alpha".to_string()));

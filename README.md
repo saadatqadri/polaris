@@ -45,7 +45,9 @@ polaris new draft.md   # or just: polaris draft.md
 ```
 
 This creates a new markdown file and opens it in the editor — one quiet,
-centered page with fixed typography.
+centered page with fixed typography. (Your very first bare `polaris`
+launch opens a short welcome tour instead — `polaris welcome` brings it
+back anytime.)
 
 ### 2. Writing in Polaris
 

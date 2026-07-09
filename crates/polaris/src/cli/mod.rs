@@ -20,6 +20,9 @@ pub enum Commands {
         file: Option<PathBuf>,
     },
 
+    /// Reopen the welcome tour
+    Welcome,
+
     /// Create a new markdown file and open it in the editor
     New {
         /// Name of the file to create

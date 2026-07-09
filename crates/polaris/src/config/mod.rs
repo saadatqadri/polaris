@@ -12,6 +12,10 @@ pub struct Config {
     /// follow the OS (delete the key to go back to following the OS).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
+
+    /// The first-run welcome tour has been shown.
+    #[serde(default)]
+    pub onboarded: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
