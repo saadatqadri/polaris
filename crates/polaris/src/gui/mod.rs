@@ -149,7 +149,9 @@ enum Message {
     FindOpen,
     RenameOpen,
     OverlayInput(String),
-    OverlaySubmit { backwards: bool },
+    OverlaySubmit {
+        backwards: bool,
+    },
     OverlayClose,
     CloseRequested(iced::window::Id),
     DraftsNav(i32),
@@ -157,6 +159,9 @@ enum Message {
     DraftsFlip,
     DraftsRestore,
     DraftsBack,
+    /// Keyboard scrolling in preview: signed pixels (arrows, page keys).
+    PreviewScroll(f32),
+    PreviewSnap(f32),
 }
 
 impl App {
@@ -641,6 +646,14 @@ impl App {
                 };
                 Task::none()
             }
+            Message::PreviewScroll(dy) => iced::widget::operation::scroll_by(
+                PREVIEW_SCROLL_ID,
+                scrollable::AbsoluteOffset { x: 0.0, y: dy },
+            ),
+            Message::PreviewSnap(y) => iced::widget::operation::snap_to(
+                PREVIEW_SCROLL_ID,
+                scrollable::RelativeOffset { x: 0.0, y },
+            ),
             Message::CloseRequested(id) => {
                 if self.doc.path().is_some() {
                     if self.doc.is_dirty() {
@@ -1345,6 +1358,20 @@ fn preview_key_events(
             keyboard::Key::Character("p") if modifiers.command() => Some(Message::TogglePreview),
             keyboard::Key::Character("t") if modifiers.command() => Some(Message::ToggleTheme),
             keyboard::Key::Character("s") if modifiers.command() => Some(Message::Save),
+            keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
+                Some(Message::PreviewScroll(-60.0))
+            }
+            keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
+                Some(Message::PreviewScroll(60.0))
+            }
+            keyboard::Key::Named(keyboard::key::Named::PageUp) => {
+                Some(Message::PreviewScroll(-600.0))
+            }
+            keyboard::Key::Named(keyboard::key::Named::PageDown) => {
+                Some(Message::PreviewScroll(600.0))
+            }
+            keyboard::Key::Named(keyboard::key::Named::Home) => Some(Message::PreviewSnap(0.0)),
+            keyboard::Key::Named(keyboard::key::Named::End) => Some(Message::PreviewSnap(1.0)),
             _ => None,
         }
     } else {
