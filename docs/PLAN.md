@@ -24,6 +24,12 @@ increasingly — eager to write *for* you. Polaris is the counterposition:
   composes, autocompletes, or ghost-writes. When AI eventually arrives
   (Phase 4+, opt-in), it may only *annotate in a margin when explicitly
   summoned* — an editor, never an author.
+- **Write Once, Publish Anywhere** *(owner direction, 2026-07-09 — and the
+  eventual business model)*: Polaris is where everything gets drafted —
+  blog posts, technical docs, LinkedIn posts, newsletters — and publishing
+  is syndication outward to whatever platform: Notion today; Hugo next
+  (owner's saadatqadri.com); LinkedIn, Substack, and more later. The
+  document's plain-markdown home never moves; targets are adapters.
 
 Inspirations: Draft (draftin.com) for writer-centric version control,
 accept/reject editing, and Hemingway mode; iA Writer for typographic discipline.
@@ -213,7 +219,28 @@ and reserves annotation storage per `docs/AI.md`. Awaiting owner approval.
 ### Phase 4 — Editing workflow & publish anywhere
 - Import an edited copy → word-level diff → accept/reject each change
   (Draft's collaboration model, without a server)
-- Publish targets beyond Notion: HTML/PDF export, GitHub gist, generic webhook
+- **Publish targets beyond Notion** (the Write-Once-Publish-Anywhere arc):
+  - **Hugo (first — owner's site).** Cheapest by far, because Hugo *is*
+    markdown: generate front matter (title from H1, date, draft flag) and
+    write into the configured `content/` directory of the site repo; the
+    owner's existing deploy pipeline does the rest. Config: a `[hugo]`
+    section (content dir, optional front-matter defaults). No git
+    automation in v1 — Polaris writes the file, the user commits.
+  - **HTML/PDF export** — local, no accounts, table stakes.
+  - **LinkedIn** — API access is restrictive (partner program for posting);
+    v1 realism is "format for LinkedIn + copy to clipboard" until/unless
+    API access lands.
+  - **Substack** — no official API; likely email-to-post or
+    format-and-paste. Investigate at design time.
+  - Architecture: `polaris-notion` generalizes into a `publish` layer of
+    target adapters (markdown in, platform out); Cmd+D grows a target
+    picker only when there are ≥2 targets — one keystroke stays one
+    keystroke.
+- **Technical-docs preview fidelity** (owner writes a lot of these):
+  tables ✓ (2026-07-09), code blocks ✓; still open — inline images in
+  preview, mermaid rendering (deliberately parked, see CLAUDE.md), and
+  how each target handles them (Hugo passes mermaid/images through
+  natively — another reason it's first)
 - Only here do we *consider* summoned-AI margin annotations, and only under
   the binding rules in [`docs/AI.md`](AI.md) (2026-07-07): no machine words
   in the buffer as an architectural invariant, summonable only on a marked

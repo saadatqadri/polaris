@@ -108,8 +108,13 @@ this file is only the condensed handover summary.
   words struck in quiet; Tab flips direction), R restores (snapshots
   current first; one undo group). Rename migrates history. notes/ dir
   reserved for Phase 4 AI annotations.
-- **Phase 4:** accept/reject editing workflow; more publish targets (HTML/PDF,
-  gist, webhook).
+- **Phase 4:** accept/reject editing workflow; **Write Once, Publish
+  Anywhere** (owner direction 2026-07-09, eventual business model): Hugo
+  first (owner's saadatqadri.com — front matter + write into content/,
+  no git automation v1), then HTML/PDF, LinkedIn (API-restricted:
+  format+copy v1), Substack (no API: investigate). polaris-notion
+  generalizes into target adapters. Owner writes technical docs: preview
+  fidelity (images, mermaid) and target passthrough matter.
 - **Phase 5:** ship it — signing/notarization, .app bundle, Homebrew tap,
   quiet updates. Prebuilt releases + install.sh live since 2026-07-07
   (tag `v*` triggers .github/workflows/release.yml).
