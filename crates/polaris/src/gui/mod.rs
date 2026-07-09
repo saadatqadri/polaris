@@ -25,6 +25,8 @@ use polaris_drafts::{word_diff, DiffKind, DraftStore, Kind as DraftKind};
 
 const CHROME_INPUT_ID: &str = "chrome-input";
 const PREVIEW_SCROLL_ID: &str = "preview-scroll";
+const DRAFT_VIEW_SCROLL_ID: &str = "draft-view-scroll";
+const DRAFTS_LIST_SCROLL_ID: &str = "drafts-list-scroll";
 
 /// DESIGN.md chrome fade: 0.6s out on keystroke, back 1.2s after rest.
 const FADE_OUT_SECS: f32 = 0.6;
@@ -159,9 +161,10 @@ enum Message {
     DraftsFlip,
     DraftsRestore,
     DraftsBack,
-    /// Keyboard scrolling in preview: signed pixels (arrows, page keys).
-    PreviewScroll(f32),
-    PreviewSnap(f32),
+    /// Keyboard scrolling for read-only views: (scrollable id, signed px).
+    ScrollBy(&'static str, f32),
+    /// Snap a read-only view to a relative position (0.0 top, 1.0 bottom).
+    Snap(&'static str, f32),
 }
 
 impl App {
@@ -584,9 +587,18 @@ impl App {
             Message::OverlayClose => self.close_overlay(),
             Message::DraftsNav(delta) => {
                 let len = self.store.as_ref().map(|s| s.entries().len()).unwrap_or(0);
-                if len > 0 {
+                if len > 1 {
                     let cur = self.drafts_selected as i32 + delta;
                     self.drafts_selected = cur.clamp(0, len as i32 - 1) as usize;
+                    // Keep the selection in view (relative position is a
+                    // good approximation for evenly sized rows).
+                    return iced::widget::operation::snap_to(
+                        DRAFTS_LIST_SCROLL_ID,
+                        scrollable::RelativeOffset {
+                            x: 0.0,
+                            y: self.drafts_selected as f32 / (len - 1) as f32,
+                        },
+                    );
                 }
                 Task::none()
             }
@@ -646,14 +658,12 @@ impl App {
                 };
                 Task::none()
             }
-            Message::PreviewScroll(dy) => iced::widget::operation::scroll_by(
-                PREVIEW_SCROLL_ID,
-                scrollable::AbsoluteOffset { x: 0.0, y: dy },
-            ),
-            Message::PreviewSnap(y) => iced::widget::operation::snap_to(
-                PREVIEW_SCROLL_ID,
-                scrollable::RelativeOffset { x: 0.0, y },
-            ),
+            Message::ScrollBy(id, dy) => {
+                iced::widget::operation::scroll_by(id, scrollable::AbsoluteOffset { x: 0.0, y: dy })
+            }
+            Message::Snap(id, y) => {
+                iced::widget::operation::snap_to(id, scrollable::RelativeOffset { x: 0.0, y })
+            }
             Message::CloseRequested(id) => {
                 if self.doc.path().is_some() {
                     if self.doc.is_dirty() {
@@ -1226,6 +1236,7 @@ impl App {
 
         let list = container(column(rows).spacing(14)).max_width(600);
         scrollable(container(list).center_x(Fill))
+            .id(DRAFTS_LIST_SCROLL_ID)
             .width(Fill)
             .height(Fill)
             .into()
@@ -1271,6 +1282,7 @@ impl App {
             left: 2.0,
         });
         scrollable(container(column_content).center_x(Fill))
+            .id(DRAFT_VIEW_SCROLL_ID)
             .width(Fill)
             .height(Fill)
             .into()
@@ -1318,6 +1330,24 @@ fn draft_view_key_events(
             keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::DraftsBack),
             keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::DraftsFlip),
             keyboard::Key::Character("r") => Some(Message::DraftsRestore),
+            keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
+                Some(Message::ScrollBy(DRAFT_VIEW_SCROLL_ID, -60.0))
+            }
+            keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
+                Some(Message::ScrollBy(DRAFT_VIEW_SCROLL_ID, 60.0))
+            }
+            keyboard::Key::Named(keyboard::key::Named::PageUp) => {
+                Some(Message::ScrollBy(DRAFT_VIEW_SCROLL_ID, -600.0))
+            }
+            keyboard::Key::Named(keyboard::key::Named::PageDown) => {
+                Some(Message::ScrollBy(DRAFT_VIEW_SCROLL_ID, 600.0))
+            }
+            keyboard::Key::Named(keyboard::key::Named::Home) => {
+                Some(Message::Snap(DRAFT_VIEW_SCROLL_ID, 0.0))
+            }
+            keyboard::Key::Named(keyboard::key::Named::End) => {
+                Some(Message::Snap(DRAFT_VIEW_SCROLL_ID, 1.0))
+            }
             _ => None,
         }
     } else {
@@ -1359,19 +1389,23 @@ fn preview_key_events(
             keyboard::Key::Character("t") if modifiers.command() => Some(Message::ToggleTheme),
             keyboard::Key::Character("s") if modifiers.command() => Some(Message::Save),
             keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
-                Some(Message::PreviewScroll(-60.0))
+                Some(Message::ScrollBy(PREVIEW_SCROLL_ID, -60.0))
             }
             keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
-                Some(Message::PreviewScroll(60.0))
+                Some(Message::ScrollBy(PREVIEW_SCROLL_ID, 60.0))
             }
             keyboard::Key::Named(keyboard::key::Named::PageUp) => {
-                Some(Message::PreviewScroll(-600.0))
+                Some(Message::ScrollBy(PREVIEW_SCROLL_ID, -600.0))
             }
             keyboard::Key::Named(keyboard::key::Named::PageDown) => {
-                Some(Message::PreviewScroll(600.0))
+                Some(Message::ScrollBy(PREVIEW_SCROLL_ID, 600.0))
             }
-            keyboard::Key::Named(keyboard::key::Named::Home) => Some(Message::PreviewSnap(0.0)),
-            keyboard::Key::Named(keyboard::key::Named::End) => Some(Message::PreviewSnap(1.0)),
+            keyboard::Key::Named(keyboard::key::Named::Home) => {
+                Some(Message::Snap(PREVIEW_SCROLL_ID, 0.0))
+            }
+            keyboard::Key::Named(keyboard::key::Named::End) => {
+                Some(Message::Snap(PREVIEW_SCROLL_ID, 1.0))
+            }
             _ => None,
         }
     } else {
