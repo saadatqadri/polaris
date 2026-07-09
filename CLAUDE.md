@@ -128,6 +128,10 @@ this file is only the condensed handover summary.
   macOS Cmd+Q via the app menu may terminate without a close request —
   unverified; if last-second keystrokes ever drop on Cmd+Q, that's why.
 - Notion: images and links still map to plain text.
+- Preview: mermaid blocks show labeled source, not rendered diagrams —
+  real rendering needs a JS engine/webview (against the design) or a
+  network service (against local-first). Deliberate; revisit only with
+  its own design conversation.
 
 ## Open questions for the user
 
