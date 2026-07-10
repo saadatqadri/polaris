@@ -10,6 +10,12 @@ This document turns that motivation into binding design. It governs any
 future AI work (Phase 4+). DESIGN.md principle 4 and PLAN.md principle #2
 defer to it.
 
+> Addendum (2026-07-10): these constraints are pedagogy, not just ethics.
+> The owner's stated goal is that Polaris make its writer *better* — and
+> an AI that rewrites your sentence improves the document while atrophying
+> the writer. Critique-only means the writer does the fixing, and the
+> fixing is the learning. Retype-don't-paste is deliberate practice.
+
 ## The three rules — structural, not settings
 
 1. **No machine words in the buffer.** There is no code path that inserts

@@ -31,6 +31,16 @@ increasingly — eager to write *for* you. Polaris is the counterposition:
   (owner's saadatqadri.com); LinkedIn, Substack, and more later. The
   document's plain-markdown home never moves; targets are adapters.
 
+**The eventual goal** *(owner, 2026-07-10)*: not just a clean page —
+**Polaris should make its writer a better writer and a better thinker.**
+Only three things reliably do that: writing more, revising more, honest
+critique. The product maps onto them exactly — Phases 1–2 make writing
+frictionless and separate generation from editing (Hemingway); Phase 3
+makes revision visible (your own draft diffs are self-knowledge); Phase 4's
+summoned critique asks questions instead of rewriting, because doing the
+fixing is the learning. What Polaris refuses to do is part of the design:
+a tool that writes for you atrophies the skill it claims to serve.
+
 Inspirations: Draft (draftin.com) for writer-centric version control,
 accept/reject editing, and Hemingway mode; iA Writer for typographic discipline.
 
