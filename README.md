@@ -246,7 +246,7 @@ system in [`design/DESIGN.md`](design/DESIGN.md) with a typeable mock at
 - [x] **Phase 3** — drafts: named snapshots (kept forever), auto snapshots,
   word-level diffs, one-key restore — content-addressed store, no git
 - [ ] **Phase 4** — accept/reject editing workflow; Write Once, Publish
-  Anywhere: Hugo first, then HTML/PDF, LinkedIn, Substack
+  Anywhere: Hugo and Substack (named priorities), then HTML/PDF, LinkedIn
 - [ ] **Phase 5** — ship it: signed/notarized `.app`, Homebrew tap, quiet
   updates (prebuilt releases + installer already live)
 - [ ] **Phase 6** — iOS: iPad first, then iPhone — native front-end over

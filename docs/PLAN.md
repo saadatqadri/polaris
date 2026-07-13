@@ -229,23 +229,37 @@ and reserves annotation storage per `docs/AI.md`. Awaiting owner approval.
 ### Phase 4 — Editing workflow & publish anywhere
 - Import an edited copy → word-level diff → accept/reject each change
   (Draft's collaboration model, without a server)
-- **Publish targets beyond Notion** (the Write-Once-Publish-Anywhere arc):
-  - **Hugo (first — owner's site).** Cheapest by far, because Hugo *is*
-    markdown: generate front matter (title from H1, date, draft flag) and
-    write into the configured `content/` directory of the site repo; the
-    owner's existing deploy pipeline does the rest. Config: a `[hugo]`
-    section (content dir, optional front-matter defaults). No git
+- **Publish targets beyond Notion** (the Write-Once-Publish-Anywhere arc).
+  The two the owner has named as priorities are **Hugo** and **Substack**:
+  - **Hugo (first — owner's saadatqadri.com).** Cheapest by far, because
+    Hugo *is* markdown: generate front matter (title from H1, date, draft
+    flag) and write into the configured `content/` directory of the site
+    repo; the owner's existing deploy pipeline does the rest. Config: a
+    `[hugo]` section (content dir, optional front-matter defaults). No git
     automation in v1 — Polaris writes the file, the user commits.
+  - **Substack (named priority — newsletters).** No official publishing
+    API, so v1 is honest about the mechanics. Two candidate paths, to
+    settle at design time:
+    - **Email-to-draft**: many Substacks accept a post by emailing a
+      publication-specific address; Polaris renders the markdown to a
+      Substack-friendly email (HTML) and sends via the user's SMTP or a
+      `mailto:`. Lands as a Substack *draft* to review and send — which
+      fits Polaris's "you press publish, not the machine" stance.
+    - **Format-and-paste**: convert to the rich HTML Substack's editor
+      accepts and copy to clipboard; the user pastes into a new post.
+      Zero-dependency fallback, always works.
+    Recommendation: ship format-and-paste first (trivial, reliable),
+    investigate email-to-draft as the one-step upgrade. No unofficial
+    API scraping — fragile and against ToS.
   - **HTML/PDF export** — local, no accounts, table stakes.
   - **LinkedIn** — API access is restrictive (partner program for posting);
     v1 realism is "format for LinkedIn + copy to clipboard" until/unless
     API access lands.
-  - **Substack** — no official API; likely email-to-post or
-    format-and-paste. Investigate at design time.
   - Architecture: `polaris-notion` generalizes into a `publish` layer of
     target adapters (markdown in, platform out); Cmd+D grows a target
     picker only when there are ≥2 targets — one keystroke stays one
-    keystroke.
+    keystroke. Clipboard/email targets and file/API targets share the
+    adapter trait; the difference is just the "out" side.
 - **Technical-docs preview fidelity** (owner writes a lot of these):
   tables ✓ (2026-07-09), code blocks ✓; still open — inline images in
   preview, mermaid rendering (deliberately parked, see CLAUDE.md), and
