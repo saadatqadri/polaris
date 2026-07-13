@@ -760,7 +760,16 @@ impl App {
                     M::WordRight => self.doc.move_word_right(extend),
                     M::Home => self.doc.move_line_start(extend),
                     M::End => self.doc.move_line_end(extend),
+                    M::DocStart => self.doc.set_cursor_pos(0, extend),
+                    M::DocEnd => {
+                        let end = self.doc.buffer().len_chars();
+                        self.doc.set_cursor_pos(end, extend);
+                    }
                 }
+            }
+            A::VerticalMove { target, extend } => {
+                self.pending_revert = None;
+                self.doc.set_cursor_pos(target, extend);
             }
             A::SelectAll => self.doc.select_all(),
             A::Click { position, extend } => {
@@ -1615,6 +1624,50 @@ mod tests {
 
         act(&mut app, editor::Action::SelectWord { position: 7 });
         assert_eq!(app.doc.selected_text().as_deref(), Some("brave"));
+    }
+
+    #[test]
+    fn navigation_actions_route_through_core() {
+        let (mut app, _) = App::boot(None, false);
+        type_into(&mut app, "hello brave world");
+
+        // Word jump (Option+arrow) advances by a word.
+        act(
+            &mut app,
+            editor::Action::Move(editor::Motion::DocStart, false),
+        );
+        assert_eq!(app.doc.cursor().pos, 0);
+        act(
+            &mut app,
+            editor::Action::Move(editor::Motion::WordRight, false),
+        );
+        assert_eq!(app.doc.cursor().pos, 5, "end of 'hello'");
+
+        // Cmd+arrow extremes.
+        act(
+            &mut app,
+            editor::Action::Move(editor::Motion::DocEnd, false),
+        );
+        assert_eq!(app.doc.cursor().pos, app.doc.text().chars().count());
+        act(
+            &mut app,
+            editor::Action::Move(editor::Motion::DocStart, true),
+        );
+        assert_eq!(
+            app.doc.selected_text().as_deref(),
+            Some("hello brave world")
+        );
+
+        // VerticalMove is a widget-resolved position; the app just applies it.
+        act(
+            &mut app,
+            editor::Action::VerticalMove {
+                target: 6,
+                extend: false,
+            },
+        );
+        assert_eq!(app.doc.cursor().pos, 6);
+        assert_eq!(app.doc.selection(), None);
     }
 
     #[test]

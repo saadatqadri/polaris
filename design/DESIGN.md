@@ -77,7 +77,10 @@ follow the OS again. No theme editor.
 | `Ctrl+F` | Find |
 | `Ctrl+R` | Rename file (in-chrome, prefilled; never overwrites) |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
-| `Ctrl+←/→` | Word jump |
+| `⌥ ←/→` | Word jump (macOS) |
+| `⌘ ←/→` | Line start / end |
+| `⌘ ↑/↓` | Document start / end |
+| `↑/↓` | Up / down a *visual* line (follows soft wrap, not paragraphs) |
 | `Ctrl+D` | Deploy to Notion |
 | `Ctrl+Q` | Quit |
 

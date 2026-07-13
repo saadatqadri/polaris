@@ -46,6 +46,12 @@ pub enum Action {
     Backspace,
     Delete,
     Move(Motion, bool),
+    /// Up/Down resolved to a char position by the widget's wrap layout, so
+    /// navigation follows visual (soft-wrapped) rows, not buffer lines.
+    VerticalMove {
+        target: usize,
+        extend: bool,
+    },
     SelectAll,
     Click {
         position: usize,
@@ -78,6 +84,8 @@ pub enum Motion {
     WordRight,
     Home,
     End,
+    DocStart,
+    DocEnd,
 }
 
 pub struct EditorView<'a, Message> {
@@ -129,6 +137,9 @@ struct State {
     dragging: bool,
     last_click: Option<(Instant, usize)>,
     preedit: Option<String>,
+    /// Preferred visual x (pixels) held across a run of Up/Down, so the
+    /// caret keeps its column over short rows. Cleared by any other key.
+    sticky_x: Option<f32>,
 }
 
 impl Default for State {
@@ -142,6 +153,7 @@ impl Default for State {
             dragging: false,
             last_click: None,
             preedit: None,
+            sticky_x: None,
         }
     }
 }
@@ -283,6 +295,51 @@ impl State {
 
     fn y_of_line(&self, line: usize) -> f32 {
         self.heights[..line.min(self.heights.len())].iter().sum()
+    }
+
+    /// The caret's visual x within its paragraph (pixels).
+    fn caret_x(&self, doc: &Document, width: f32) -> f32 {
+        let buffer = doc.buffer();
+        let (line, byte) = char_pos_to_line_byte(buffer, doc.cursor().pos);
+        let text = buffer.line(line);
+        let content = text.strip_suffix('\n').unwrap_or(&text);
+        position_in_line(content, byte, width).0
+    }
+
+    /// Move one visual row up or down at the preferred x, following
+    /// soft-wrapped rows and crossing paragraph boundaries. Returns the new
+    /// char position (clamped to document start/end at the edges).
+    fn visual_move(&self, doc: &Document, up: bool, sticky_x: f32, width: f32) -> usize {
+        let buffer = doc.buffer();
+        let (line, byte) = char_pos_to_line_byte(buffer, doc.cursor().pos);
+        let text = buffer.line(line);
+        let content = text.strip_suffix('\n').unwrap_or(&text);
+        let (_, cy) = position_in_line(content, byte, width);
+        let lh = line_height_px();
+        let row_top = self.y_of_line(line) + cy;
+        // Aim at the middle of the neighbouring row.
+        let target_y = if up {
+            row_top - lh * 0.5
+        } else {
+            row_top + lh * 1.5
+        };
+        if target_y < 0.0 {
+            return 0;
+        }
+        let mut y = 0.0;
+        for (i, paragraph) in self.paragraphs.iter().enumerate() {
+            let h = self.heights[i];
+            if target_y < y + h {
+                let local = Point::new(sticky_x.max(0.0), (target_y - y).max(0.0));
+                let hit = paragraph
+                    .hit_test(local)
+                    .map(|hit| hit.cursor())
+                    .unwrap_or(usize::MAX);
+                return line_byte_to_char_pos(buffer, i, hit);
+            }
+            y += h;
+        }
+        buffer.len_chars()
     }
 
     /// The scroll offset for this frame; non-typewriter keeps the caret in
@@ -545,6 +602,12 @@ impl<Message> Widget<Message, Theme, Renderer> for EditorView<'_, Message> {
                         Key::Character("v") => {
                             clipboard.read(clipboard::Kind::Standard).map(Action::Paste)
                         }
+                        // macOS: Cmd+Left/Right = line start/end,
+                        // Cmd+Up/Down = document start/end.
+                        Key::Named(Named::ArrowLeft) => Some(Action::Move(Motion::Home, extend)),
+                        Key::Named(Named::ArrowRight) => Some(Action::Move(Motion::End, extend)),
+                        Key::Named(Named::ArrowUp) => Some(Action::Move(Motion::DocStart, extend)),
+                        Key::Named(Named::ArrowDown) => Some(Action::Move(Motion::DocEnd, extend)),
                         Key::Character(c) => Some(Action::Command {
                             key: c.to_string(),
                             shift: modifiers.shift(),
@@ -568,8 +631,22 @@ impl<Message> Widget<Message, Theme, Renderer> for EditorView<'_, Message> {
                             },
                             extend,
                         )),
-                        Key::Named(Named::ArrowUp) => Some(Action::Move(Motion::Up, extend)),
-                        Key::Named(Named::ArrowDown) => Some(Action::Move(Motion::Down, extend)),
+                        // Up/Down follow visual rows (soft wrap), resolved
+                        // here where the wrap layout lives.
+                        Key::Named(Named::ArrowUp) | Key::Named(Named::ArrowDown) => {
+                            let up = matches!(key.as_ref(), Key::Named(Named::ArrowUp));
+                            let width = state.built_width;
+                            let sx = match state.sticky_x {
+                                Some(x) => x,
+                                None => {
+                                    let x = state.caret_x(self.doc, width);
+                                    state.sticky_x = Some(x);
+                                    x
+                                }
+                            };
+                            let target = state.visual_move(self.doc, up, sx, width);
+                            Some(Action::VerticalMove { target, extend })
+                        }
                         Key::Named(Named::Home) => Some(Action::Move(Motion::Home, extend)),
                         Key::Named(Named::End) => Some(Action::Move(Motion::End, extend)),
                         _ => text
@@ -579,6 +656,10 @@ impl<Message> Widget<Message, Theme, Renderer> for EditorView<'_, Message> {
                             .map(Action::Insert),
                     }
                 };
+                // Vertical runs keep the preferred x; anything else drops it.
+                if !matches!(action, Some(Action::VerticalMove { .. })) {
+                    state.sticky_x = None;
+                }
                 if let Some(action) = action {
                     shell.publish((self.on_action)(action));
                     shell.capture_event();
