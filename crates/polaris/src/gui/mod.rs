@@ -1742,7 +1742,10 @@ mod tests {
         assert_eq!(app.doc.text(), "hello brave new world", "one undo");
 
         // Delete to line start from the end wipes the line.
-        act(&mut app, editor::Action::Move(editor::Motion::DocEnd, false));
+        act(
+            &mut app,
+            editor::Action::Move(editor::Motion::DocEnd, false),
+        );
         act(&mut app, editor::Action::DeleteToLineStart);
         assert_eq!(app.doc.text(), "");
 
