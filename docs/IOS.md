@@ -1,6 +1,6 @@
 # Polaris on iOS — iPad first (Phase 6 design)
 
-> Status: DESIGN — pre-build. Owner wants to test on iPad soon.
+> Status: DESIGN — i0 (FFI spike) DONE 2026-07-13. Owner wants iPad soon.
 > Required by PLAN §5 Phase 6.
 
 ## The one hard truth
@@ -96,10 +96,14 @@ differs.
 
 ## Milestones (iOS)
 
-- **i0 — FFI spike.** `polaris-ffi` + uniffi; build the `.xcframework`; a
-  Swift unit test that creates a `Document`, inserts "héllo 👋", reads it
-  back, undoes. Proves the toolchain end to end. *(This is the real first
-  step — small, and it de-risks everything.)*
+- **i0 — FFI spike — DONE (2026-07-13).** `crates/polaris-ffi`: a uniffi
+  wrapper (`PolarisDocument`) over core's in-memory editing. **Proven on
+  the host**: `swift/check-host.sh` builds the lib, generates the Swift
+  bindings, and runs `swift/roundtrip.swift` — real Swift creating a
+  document, inserting "héllo 👋 world", undo/redo, reading back — all green.
+  The iOS `.xcframework` build (`build-xcframework.sh`) is written and
+  waits only on full Xcode + the iOS SDK (Command Line Tools lack it). The
+  bridge itself is confirmed sound.
 - **i1 — The page (test on iPad).** DocumentGroup app; native text surface
   over a `.md`; bundled fonts; 62ch-ish measure; light/dark; autosave
   through `UIDocument`. **Done when: the owner writes on the iPad and the

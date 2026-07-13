@@ -1,0 +1,23 @@
+[package]
+name = "polaris-ffi"
+description = "uniffi FFI bridge exposing polaris-core to Swift (iOS) — see docs/IOS.md"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "polaris_ffi"
+# lib: host builds + tests · staticlib: the iOS xcframework · cdylib: local
+# Swift binding generation and macOS round-trip test.
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[[bin]]
+# `cargo run --bin uniffi-bindgen generate …` emits the Swift bindings.
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+polaris-core = { path = "../polaris-core" }
+uniffi = { version = "0.32", features = ["cli"] }

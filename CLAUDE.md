@@ -121,8 +121,10 @@ this file is only the condensed handover summary.
 - **Phase 6:** iOS, iPad first — **design doc: docs/IOS.md**. Native
   SwiftUI over polaris-core via uniffi FFI (iced has no iOS target);
   DocumentGroup app editing .md in Files/iCloud; native text surface first
-  (like the desktop M2 shim), custom view for writing modes later. i0 =
-  FFI spike (crates/polaris-ffi + xcframework + a Swift round-trip test).
+  (like the desktop M2 shim), custom view for writing modes later. i0 DONE 2026-07-13:
+  crates/polaris-ffi (uniffi wrapper over core), proven on the host via
+  swift/check-host.sh (real Swift round-trips through polaris-core).
+  build-xcframework.sh waits on full Xcode (CLT lacks the iOS SDK).
   Gate: owner needs Apple Developer account + Xcode for on-device builds
   (I can write all code but can't build/sign to the iPad from here).
 
