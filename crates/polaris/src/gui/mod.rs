@@ -723,7 +723,14 @@ impl App {
         use editor::Action as A;
         match action {
             // Hemingway mode: forward only — deletion waits for the edit pass.
-            A::Backspace | A::Delete | A::Cut if self.hemingway => {}
+            A::Backspace
+            | A::Delete
+            | A::DeleteWordBack
+            | A::DeleteWordForward
+            | A::DeleteToLineStart
+            | A::DeleteToLineEnd
+            | A::Cut
+                if self.hemingway => {}
             A::Insert(s) => {
                 self.insert_with_typography(&s);
                 self.note_edit();
@@ -746,6 +753,40 @@ impl App {
             A::Delete => {
                 self.doc.delete_forward();
                 self.pending_revert = None;
+                self.note_edit();
+            }
+            // Range deletions: select, then delete the selection (one undo
+            // group, and a no-op when the range is empty).
+            A::DeleteWordBack => {
+                self.pending_revert = None;
+                if self.doc.selection().is_none() {
+                    self.doc.move_word_left(true);
+                }
+                self.doc.backspace();
+                self.note_edit();
+            }
+            A::DeleteWordForward => {
+                self.pending_revert = None;
+                if self.doc.selection().is_none() {
+                    self.doc.move_word_right(true);
+                }
+                self.doc.backspace();
+                self.note_edit();
+            }
+            A::DeleteToLineStart => {
+                self.pending_revert = None;
+                if self.doc.selection().is_none() {
+                    self.doc.move_line_start(true);
+                }
+                self.doc.backspace();
+                self.note_edit();
+            }
+            A::DeleteToLineEnd => {
+                self.pending_revert = None;
+                if self.doc.selection().is_none() {
+                    self.doc.move_line_end(true);
+                }
+                self.doc.backspace();
                 self.note_edit();
             }
             A::Move(motion, extend) => {
@@ -1691,6 +1732,31 @@ mod tests {
     }
 
     #[test]
+    fn word_and_line_deletions() {
+        let (mut app, _) = App::boot(None, false);
+        type_into(&mut app, "hello brave new world");
+        // Caret at end; delete a word back.
+        act(&mut app, editor::Action::DeleteWordBack);
+        assert_eq!(app.doc.text(), "hello brave new ");
+        act(&mut app, editor::Action::Undo);
+        assert_eq!(app.doc.text(), "hello brave new world", "one undo");
+
+        // Delete to line start from the end wipes the line.
+        act(&mut app, editor::Action::Move(editor::Motion::DocEnd, false));
+        act(&mut app, editor::Action::DeleteToLineStart);
+        assert_eq!(app.doc.text(), "");
+
+        // Forward word delete from the start.
+        type_into(&mut app, "one two three");
+        act(
+            &mut app,
+            editor::Action::Move(editor::Motion::DocStart, false),
+        );
+        act(&mut app, editor::Action::DeleteWordForward);
+        assert_eq!(app.doc.text(), " two three");
+    }
+
+    #[test]
     fn hemingway_mode_is_forward_only() {
         let (mut app, _) = App::boot(None, false);
         type_into(&mut app, "first draft");
@@ -1702,6 +1768,8 @@ mod tests {
 
         act(&mut app, editor::Action::Backspace);
         act(&mut app, editor::Action::Delete);
+        act(&mut app, editor::Action::DeleteWordBack);
+        act(&mut app, editor::Action::DeleteToLineStart);
         act(&mut app, editor::Action::SelectAll);
         act(&mut app, editor::Action::Cut);
         assert_eq!(app.doc.text(), "first draft", "nothing deletes");

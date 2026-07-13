@@ -81,6 +81,8 @@ follow the OS again. No theme editor.
 | `⌘ ←/→` | Line start / end |
 | `⌘ ↑/↓` | Document start / end |
 | `↑/↓` | Up / down a *visual* line (follows soft wrap, not paragraphs) |
+| `⌥ ⌫` | Delete word back (`⌥` + fwd-delete = word forward) |
+| `⌘ ⌫` | Delete to line start (`⌘` + fwd-delete = to line end) |
 | `Ctrl+D` | Deploy to Notion |
 | `Ctrl+Q` | Quit |
 

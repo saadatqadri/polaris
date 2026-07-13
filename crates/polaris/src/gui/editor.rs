@@ -45,6 +45,10 @@ pub enum Action {
     Enter,
     Backspace,
     Delete,
+    DeleteWordBack,
+    DeleteWordForward,
+    DeleteToLineStart,
+    DeleteToLineEnd,
     Move(Motion, bool),
     /// Up/Down resolved to a char position by the widget's wrap layout, so
     /// navigation follows visual (soft-wrapped) rows, not buffer lines.
@@ -608,6 +612,9 @@ impl<Message> Widget<Message, Theme, Renderer> for EditorView<'_, Message> {
                         Key::Named(Named::ArrowRight) => Some(Action::Move(Motion::End, extend)),
                         Key::Named(Named::ArrowUp) => Some(Action::Move(Motion::DocStart, extend)),
                         Key::Named(Named::ArrowDown) => Some(Action::Move(Motion::DocEnd, extend)),
+                        // Cmd+Delete = delete to line start / end (macOS).
+                        Key::Named(Named::Backspace) => Some(Action::DeleteToLineStart),
+                        Key::Named(Named::Delete) => Some(Action::DeleteToLineEnd),
                         Key::Character(c) => Some(Action::Command {
                             key: c.to_string(),
                             shift: modifiers.shift(),
@@ -616,6 +623,9 @@ impl<Message> Widget<Message, Theme, Renderer> for EditorView<'_, Message> {
                     }
                 } else {
                     match key.as_ref() {
+                        // Option+Delete = delete a word (macOS).
+                        Key::Named(Named::Backspace) if word => Some(Action::DeleteWordBack),
+                        Key::Named(Named::Delete) if word => Some(Action::DeleteWordForward),
                         Key::Named(Named::Backspace) => Some(Action::Backspace),
                         Key::Named(Named::Delete) => Some(Action::Delete),
                         Key::Named(Named::Enter) => Some(Action::Enter),
