@@ -248,6 +248,24 @@ fn row_end_x(paragraph: &ParagraphOf, row: usize) -> f32 {
         .unwrap_or(0.0)
 }
 
+/// A one-buffer-line step used as the anti-stuck fallback for visual moves:
+/// down lands at the start of the next line (end of doc if none), up at the
+/// start of the previous line (0 if none). Guarantees forward/back progress.
+fn buffer_line_step(buffer: &Buffer, pos: usize, up: bool) -> usize {
+    let line = buffer.char_to_line(pos);
+    if up {
+        if line == 0 {
+            0
+        } else {
+            buffer.line_to_char(line - 1)
+        }
+    } else if line + 1 >= buffer.len_lines() {
+        buffer.len_chars()
+    } else {
+        buffer.line_to_char(line + 1)
+    }
+}
+
 fn char_pos_to_line_byte(buffer: &Buffer, pos: usize) -> (usize, usize) {
     let line = buffer.char_to_line(pos);
     let line_start = buffer.line_to_char(line);
@@ -330,6 +348,8 @@ impl State {
         if target_y < 0.0 {
             return 0;
         }
+        let start = doc.cursor().pos;
+        let mut hit_pos = None;
         let mut y = 0.0;
         for (i, paragraph) in self.paragraphs.iter().enumerate() {
             let h = self.heights[i];
@@ -339,11 +359,20 @@ impl State {
                     .hit_test(local)
                     .map(|hit| hit.cursor())
                     .unwrap_or(usize::MAX);
-                return line_byte_to_char_pos(buffer, i, hit);
+                hit_pos = Some(line_byte_to_char_pos(buffer, i, hit));
+                break;
             }
             y += h;
         }
-        buffer.len_chars()
+        let target = hit_pos.unwrap_or_else(|| buffer.len_chars());
+        // A glyph outside the writing font (emoji, ●) lays out with fallback
+        // metrics, so the geometric hit can land on the same spot — never let
+        // Up/Down stick. Fall back to a plain buffer-line step.
+        if target == start {
+            buffer_line_step(buffer, start, up)
+        } else {
+            target
+        }
     }
 
     /// The scroll offset for this frame; non-typewriter keeps the caret in
@@ -800,4 +829,22 @@ pub fn word_range_at(buffer: &Buffer, position: usize) -> std::ops::Range<usize>
     let start = core_cursor::prev_word_boundary(buffer, position.min(buffer.len_chars()));
     let end = core_cursor::next_word_boundary(buffer, start);
     start..end.max(position)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::buffer_line_step;
+    use polaris_core::buffer::Buffer;
+
+    #[test]
+    fn buffer_line_step_always_progresses_and_clamps() {
+        let b = Buffer::from_str("one\ntwo\nthree");
+        // Down from line 0 → start of line 1; up → 0.
+        assert_eq!(buffer_line_step(&b, 1, false), 4); // "two" starts at char 4
+        assert_eq!(buffer_line_step(&b, 1, true), 0);
+        // Down from the last line clamps to end; up from first clamps to 0.
+        let end = b.len_chars();
+        assert_eq!(buffer_line_step(&b, 9, false), end);
+        assert_eq!(buffer_line_step(&b, 0, true), 0);
+    }
 }

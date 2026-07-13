@@ -8,7 +8,7 @@ One quiet page. Everything saves itself.
 
 ## The basics
 
-- Just type — **autosave** writes about a second after your last keystroke ("● saved", top right)
+- Just type — **autosave** writes about a second after your last keystroke ("saved" appears, top right)
 - *Smart punctuation* happens as you type: -- becomes an em dash, "quotes curl", dots become an ellipsis…
 - The chrome fades while you write and returns when you rest
 - Close the window anytime — your words are already on disk
