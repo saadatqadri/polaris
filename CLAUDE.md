@@ -118,9 +118,13 @@ this file is only the condensed handover summary.
 - **Phase 5:** ship it — signing/notarization, .app bundle, Homebrew tap,
   quiet updates. Prebuilt releases + install.sh live since 2026-07-07
   (tag `v*` triggers .github/workflows/release.yml).
-- **Phase 6:** iOS, iPad first — native (SwiftUI) front-end over
-  polaris-core via FFI (iced has no iOS target); .md files via the Files
-  app / iCloud Drive. Design doc required first.
+- **Phase 6:** iOS, iPad first — **design doc: docs/IOS.md**. Native
+  SwiftUI over polaris-core via uniffi FFI (iced has no iOS target);
+  DocumentGroup app editing .md in Files/iCloud; native text surface first
+  (like the desktop M2 shim), custom view for writing modes later. i0 =
+  FFI spike (crates/polaris-ffi + xcframework + a Swift round-trip test).
+  Gate: owner needs Apple Developer account + Xcode for on-device builds
+  (I can write all code but can't build/sign to the iPad from here).
 
 ## Known gaps / debt
 

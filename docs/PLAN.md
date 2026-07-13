@@ -291,8 +291,12 @@ be native (SwiftUI) over the Rust core compiled for iOS behind FFI
 - Documents stay plain `.md` via the Files app / iCloud Drive — local-first
   survives intact, sync is the OS's job, not ours
 - Same fixed typography, no settings, AI rules per `docs/AI.md`
-- Requires its own design doc before build (FFI surface, text input stack,
-  what of the GUI shim is reusable vs rewritten)
+- **Design doc: [`docs/IOS.md`](IOS.md)** (2026-07-13) — iced doesn't run on
+  iOS, so the front-end is native SwiftUI over polaris-core via uniffi FFI;
+  a DocumentGroup app editing .md in Files/iCloud; native text surface
+  first (mirrors the desktop M2 shim), custom text view for writing modes
+  later. Milestone i0 = the FFI spike. Gate: owner needs an Apple Developer
+  account + Xcode to reach the physical iPad.
 
 ## 6. Engineering conventions
 
