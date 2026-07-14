@@ -128,7 +128,12 @@ this file is only the condensed handover summary.
   apple/Polaris.xcodeproj. Sim on Apple Silicon needs
   ARCHS=arm64 EXCLUDED_ARCHS=x86_64. Generated project/bindings/fonts are
   gitignored (setup.sh recreates). Physical iPad + TestFlight need the
-  owner's Apple Developer account; i2 = autosave/UIDocument + full sync.
+  owner's Apple Developer account; i2 DONE 2026-07-14: owned UITextView (PolarisTextView) with smart
+  punctuation at input via the smart_substitution FFI (— … quotes,
+  code-guarded), live word_count FFI, DocumentGroup autosave. The
+  code-context guard now lives in polaris-core::typography
+  (substitute_in_context), shared desktop+iOS. i3+ = undo/selection through
+  core + writing modes (fuller custom text view).
   NOTE: the iced 'polaris' crate does NOT build for iOS — apple/ is a
   separate front-end; keep them independent.
   Gate: owner needs Apple Developer account + Xcode for on-device builds

@@ -1,6 +1,7 @@
 # Polaris on iOS — iPad first (Phase 6 design)
 
-> Status: i0 + i1 DONE 2026-07-13 — Polaris runs on the iPad simulator.
+> Status: i0–i2 DONE — Polaris runs on the physical iPad; smart
+> punctuation works. (i1 on device 2026-07-14, i2 same day.)
 > Required by PLAN §5 Phase 6.
 
 ## The one hard truth
@@ -112,8 +113,16 @@ differs.
   xcodegen (`apple/setup.sh`). **Remaining for the owner:** run on the
   physical iPad (needs the Apple Developer account) — the code is done.
   Autosave through UIDocument + full core-sync are i2.
-- **i2 — Parity basics.** Core sync (word count in chrome, undo through
-  core), smart punctuation via typing attributes, find.
+- **i2 — DONE (2026-07-14), simulator-verified.** An owned `UITextView`
+  (`PolarisTextView`, UIViewRepresentable) replaces SwiftUI's `TextEditor`,
+  so smart punctuation runs at input time through `polaris-core`
+  (`smart_substitution` FFI): typed `--`→—, `...`→…, quotes curl, skipped
+  in code — confirmed on the iPad simulator. Live word count via the
+  stateless `word_count` FFI. Autosave is DocumentGroup's (edits write
+  back to the bound text; iOS persists). The code-context guard moved into
+  `polaris-core::typography` (`substitute_in_context`), shared by desktop +
+  iOS. Remaining: undo/selection through core + writing modes need the
+  fuller custom text view (i3+).
 - **i3 — Preview.** Reuse the markdown pipeline (FFI → attributed string).
 - **i4 — Drafts + publish.** FFI to `polaris-drafts`; the publish targets.
 - **Later:** custom text view for writing modes; iPhone layout.

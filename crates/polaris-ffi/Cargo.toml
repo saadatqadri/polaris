@@ -21,3 +21,4 @@ path = "src/bin/uniffi-bindgen.rs"
 [dependencies]
 polaris-core = { path = "../polaris-core" }
 uniffi = { version = "0.32", features = ["cli"] }
+unicode-segmentation = "1.11"

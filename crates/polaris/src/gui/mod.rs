@@ -914,8 +914,8 @@ impl App {
         if self.doc.selection().is_none() {
             let pos = self.doc.cursor().pos;
             let before = self.doc.buffer().slice(0..pos);
-            if !in_code_context(&before) {
-                if let Some(sub) = typography::substitute(&before, c) {
+            {
+                if let Some(sub) = typography::substitute_in_context(&before, c) {
                     let mut literal: String = before
                         .chars()
                         .rev()
@@ -1493,21 +1493,6 @@ fn preview_key_events(
     } else {
         None
     }
-}
-
-/// Markdown context guard for smart punctuation: inside a fenced code block
-/// (odd number of ``` fence lines so far) or an inline code span (odd number
-/// of backticks on the current line).
-fn in_code_context(before: &str) -> bool {
-    let fences = before
-        .lines()
-        .filter(|l| l.trim_start().starts_with("```"))
-        .count();
-    if fences % 2 == 1 {
-        return true;
-    }
-    let line = before.rsplit('\n').next().unwrap_or(before);
-    line.chars().filter(|&c| c == '`').count() % 2 == 1
 }
 
 /// A persisted Cmd+T choice wins; otherwise follow the OS.

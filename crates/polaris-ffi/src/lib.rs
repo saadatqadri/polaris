@@ -81,9 +81,51 @@ impl PolarisDocument {
     }
 }
 
+/// Word count for a whole document — stateless, for the iOS chrome.
+#[uniffi::export]
+pub fn word_count(text: String) -> u32 {
+    use unicode_segmentation::UnicodeSegmentation;
+    text.unicode_words().count() as u32
+}
+
+/// A smart-punctuation edit: delete `delete_before` chars before the caret,
+/// then insert `insert`.
+#[derive(uniffi::Record)]
+pub struct SmartSub {
+    pub delete_before: u32,
+    pub insert: String,
+}
+
+/// Given the text before the caret and the single character just typed,
+/// return the smart-punctuation substitution — or nothing (including inside
+/// code spans/fences). Stateless; the native text view applies the result.
+#[uniffi::export]
+pub fn smart_substitution(before: String, typed: String) -> Option<SmartSub> {
+    let mut chars = typed.chars();
+    let (Some(c), None) = (chars.next(), chars.next()) else {
+        return None;
+    };
+    polaris_core::typography::substitute_in_context(&before, c).map(|s| SmartSub {
+        delete_before: s.delete_before as u32,
+        insert: s.insert.to_string(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::PolarisDocument;
+    use super::{smart_substitution, word_count, PolarisDocument};
+
+    #[test]
+    fn stateless_word_count_and_smart_punctuation() {
+        assert_eq!(word_count("héllo brave 👋 world".to_string()), 3);
+
+        let sub = smart_substitution("word ".to_string(), "-".to_string());
+        assert!(sub.is_none(), "single hyphen is literal");
+        let sub = smart_substitution("word -".to_string(), "-".to_string()).unwrap();
+        assert_eq!((sub.delete_before, sub.insert.as_str()), (1, "\u{2014}"));
+        // Guarded inside code.
+        assert!(smart_substitution("run `--".to_string(), "-".to_string()).is_none());
+    }
 
     #[test]
     fn document_round_trips_through_the_bridge_type() {

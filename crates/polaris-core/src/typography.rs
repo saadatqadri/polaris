@@ -15,9 +15,34 @@ pub struct Substitution {
     pub insert: &'static str,
 }
 
+/// Like [`substitute`], but returns `None` inside a markdown code context
+/// (fenced block or inline span), so `--verbose` and `"flags"` stay literal.
+/// This is the guard every front-end should use.
+pub fn substitute_in_context(before: &str, typed: char) -> Option<Substitution> {
+    if in_code_context(before) {
+        return None;
+    }
+    substitute(before, typed)
+}
+
+/// Inside a fenced code block (odd number of ``` fence lines so far) or an
+/// inline code span (odd number of backticks on the current line)?
+pub fn in_code_context(before: &str) -> bool {
+    let fences = before
+        .lines()
+        .filter(|l| l.trim_start().starts_with("```"))
+        .count();
+    if fences % 2 == 1 {
+        return true;
+    }
+    let line = before.rsplit('\n').next().unwrap_or(before);
+    line.chars().filter(|&c| c == '`').count() % 2 == 1
+}
+
 /// Decide the smart-punctuation substitution for `typed`, given the document
 /// text before the cursor. Returns `None` when the character should be
-/// inserted literally.
+/// inserted literally. Does **not** check code context — use
+/// [`substitute_in_context`] unless you have already guarded.
 pub fn substitute(before: &str, typed: char) -> Option<Substitution> {
     match typed {
         '"' => Some(Substitution {
@@ -144,5 +169,19 @@ mod tests {
     fn other_chars_pass_through() {
         assert_eq!(substitute("anything", 'a'), None);
         assert_eq!(substitute("anything", ' '), None);
+    }
+
+    #[test]
+    fn context_guard_skips_code() {
+        // Inline span (odd backticks on the line): no substitution.
+        assert_eq!(substitute_in_context("run `--verbose", '-'), None);
+        assert!(in_code_context("run `--verbose"));
+        // Closed span: back to normal.
+        assert!(!in_code_context("run `x` then --"));
+        assert!(substitute_in_context("run `x` then --", '-').is_some());
+        // Fenced block (odd fences).
+        assert!(in_code_context("```\ncode --"));
+        assert_eq!(substitute_in_context("```\ncode --", '-'), None);
+        assert!(!in_code_context("```\ncode\n```\nprose --"));
     }
 }
