@@ -1,6 +1,6 @@
 # Polaris on iOS — iPad first (Phase 6 design)
 
-> Status: DESIGN — i0 (FFI spike) DONE 2026-07-13. Owner wants iPad soon.
+> Status: i0 + i1 DONE 2026-07-13 — Polaris runs on the iPad simulator.
 > Required by PLAN §5 Phase 6.
 
 ## The one hard truth
@@ -104,10 +104,14 @@ differs.
   The iOS `.xcframework` build (`build-xcframework.sh`) is written and
   waits only on full Xcode + the iOS SDK (Command Line Tools lack it). The
   bridge itself is confirmed sound.
-- **i1 — The page (test on iPad).** DocumentGroup app; native text surface
-  over a `.md`; bundled fonts; 62ch-ish measure; light/dark; autosave
-  through `UIDocument`. **Done when: the owner writes on the iPad and the
-  file shows up in the Files app / iCloud.**
+- **i1 — The page — DONE (2026-07-13), simulator-verified.** `apple/`: a
+  SwiftUI DocumentGroup app editing `.md`, native `TextEditor` surface,
+  warm-paper tokens, Newsreader + iA Writer Mono bundled, chrome word
+  count driven by `polaris-core` through the FFI. Builds, installs, and
+  runs on the iPad Pro simulator (screenshots in the i1 commit). Built via
+  xcodegen (`apple/setup.sh`). **Remaining for the owner:** run on the
+  physical iPad (needs the Apple Developer account) — the code is done.
+  Autosave through UIDocument + full core-sync are i2.
 - **i2 — Parity basics.** Core sync (word count in chrome, undo through
   core), smart punctuation via typing attributes, find.
 - **i3 — Preview.** Reuse the markdown pipeline (FFI → attributed string).

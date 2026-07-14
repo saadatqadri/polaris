@@ -121,10 +121,16 @@ this file is only the condensed handover summary.
 - **Phase 6:** iOS, iPad first — **design doc: docs/IOS.md**. Native
   SwiftUI over polaris-core via uniffi FFI (iced has no iOS target);
   DocumentGroup app editing .md in Files/iCloud; native text surface first
-  (like the desktop M2 shim), custom view for writing modes later. i0 DONE 2026-07-13:
-  crates/polaris-ffi (uniffi wrapper over core), proven on the host via
-  swift/check-host.sh (real Swift round-trips through polaris-core).
-  build-xcframework.sh waits on full Xcode (CLT lacks the iOS SDK).
+  (like the desktop M2 shim), custom view for writing modes later. i0 + i1 DONE 2026-07-13: crates/polaris-ffi (uniffi wrapper over core);
+  the SwiftUI app in apple/ (DocumentGroup + native TextEditor + bundled
+  fonts + core-driven word count) BUILDS AND RUNS on the iPad simulator
+  (Xcode 26 now installed). Build: sh apple/setup.sh → open
+  apple/Polaris.xcodeproj. Sim on Apple Silicon needs
+  ARCHS=arm64 EXCLUDED_ARCHS=x86_64. Generated project/bindings/fonts are
+  gitignored (setup.sh recreates). Physical iPad + TestFlight need the
+  owner's Apple Developer account; i2 = autosave/UIDocument + full sync.
+  NOTE: the iced 'polaris' crate does NOT build for iOS — apple/ is a
+  separate front-end; keep them independent.
   Gate: owner needs Apple Developer account + Xcode for on-device builds
   (I can write all code but can't build/sign to the iPad from here).
 

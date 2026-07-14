@@ -17,3 +17,9 @@ Thumbs.db
 
 # Config (contains secrets)
 .polaris.toml
+
+# iOS app: generated project + staged artifacts (recreate with apple/setup.sh)
+apple/Polaris.xcodeproj/
+apple/Generated/
+apple/Polaris/Fonts/
+apple/build/
