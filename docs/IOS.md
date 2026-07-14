@@ -1,7 +1,7 @@
 # Polaris on iOS — iPad first (Phase 6 design)
 
-> Status: i0–i2 DONE — Polaris runs on the physical iPad; smart
-> punctuation works. (i1 on device 2026-07-14, i2 same day.)
+> Status: i0–i3 (preview) DONE — Polaris runs on the physical iPad;
+> smart punctuation + preview work. (2026-07-14.)
 > Required by PLAN §5 Phase 6.
 
 ## The one hard truth
@@ -123,7 +123,14 @@ differs.
   `polaris-core::typography` (`substitute_in_context`), shared by desktop +
   iOS. Remaining: undo/selection through core + writing modes need the
   fuller custom text view (i3+).
-- **i3 — Preview.** Reuse the markdown pipeline (FFI → attributed string).
+- **i3 — Preview — DONE (2026-07-14), simulator-verified.** `render_preview`
+  FFI parses markdown (pulldown-cmark) into a `PreviewBlock` model;
+  `PreviewView` renders it in Newsreader (headings, bold/italic, lists,
+  quotes with the whisper bar, code in Mono, rules). Invoked two ways per
+  the DESIGN iPad-interaction decision: **Cmd+P** (hardware keyboard, same
+  as desktop — verified toggling on the simulator) and a **horizontal
+  swipe** (touch). The summoned command sheet + the remaining modes
+  (focus/typewriter, which need a custom text surface) are next.
 - **i4 — Drafts + publish.** FFI to `polaris-drafts`; the publish targets.
 - **Later:** custom text view for writing modes; iPhone layout.
 

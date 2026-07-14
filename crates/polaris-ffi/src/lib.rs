@@ -9,7 +9,16 @@ use std::sync::{Arc, Mutex};
 
 use polaris_core::Document;
 
+mod preview;
+pub use preview::{PreviewBlock, PreviewSpan};
+
 uniffi::setup_scaffolding!();
+
+/// Render markdown into preview blocks for the native reading view.
+#[uniffi::export]
+pub fn render_preview(markdown: String) -> Vec<PreviewBlock> {
+    preview::render(&markdown)
+}
 
 /// A live document the Swift layer drives. Interior `Mutex` because uniffi
 /// objects are shared as `Arc` and their methods take `&self`.

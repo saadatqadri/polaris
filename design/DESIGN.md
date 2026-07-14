@@ -103,6 +103,28 @@ follow the OS again. No theme editor.
 | `Ctrl+M` | Mark a draft (in-chrome name, prefilled "Draft n") |
 | `Ctrl+Shift+M` | Drafts browser: Up/Down · Enter view · Tab flip diff · R restore · Esc |
 
+## iPad interaction (Phase 6 — decided 2026-07-14)
+
+The desktop is keyboard-first; the iPad honours that in two tiers so
+"keyboard-driven" and "chrome recedes" both survive.
+
+- **With a hardware keyboard** (the writer's rig): the **same `⌘`
+  shortcuts**, registered as `UIKeyCommand`s. They work identically to the
+  Mac, and iPadOS's hold-`⌘` overlay documents them automatically. No
+  compromise.
+- **Touch-only**: two affordances, nothing persistent on the page.
+  - **Horizontal swipe** toggles write ⟷ preview — the spatial form of
+    "the same page re-set, a mode switch not a split."
+  - **Tap the chrome (or swipe down from the top)** summons a quiet
+    **command sheet** — the modes and actions as a list, *each row showing
+    its `⌘` shortcut* (so it teaches the keyboard path and gives keyboard
+    users a discoverable palette, opened with `⌘/`). It dismisses on pick;
+    the welcome tour introduces the swipe + summon.
+
+One surface, both input types, self-teaching. Focus/typewriter on iPad
+need the custom text view (like the desktop widget) before they can be
+offered; preview + find + drafts + publish are the first sheet entries.
+
 ## Implementation notes (iced)
 
 - Fonts load once at startup from embedded bytes; `cosmic-text` (iced's text

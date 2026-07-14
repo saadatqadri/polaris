@@ -132,8 +132,13 @@ this file is only the condensed handover summary.
   punctuation at input via the smart_substitution FFI (— … quotes,
   code-guarded), live word_count FFI, DocumentGroup autosave. The
   code-context guard now lives in polaris-core::typography
-  (substitute_in_context), shared desktop+iOS. i3+ = undo/selection through
-  core + writing modes (fuller custom text view).
+  (substitute_in_context), shared desktop+iOS. i3 preview DONE 2026-07-14: render_preview FFI (markdown->PreviewBlock
+  via pulldown-cmark) + PreviewView (Newsreader); invoked by Cmd+P
+  (UIKeyCommand-style keyboard shortcut, verified) AND horizontal swipe —
+  per the DESIGN iPad-interaction decision (2026-07-14): keyboard iPad =
+  same Cmd shortcuts; touch = swipe for preview + a summoned command sheet.
+  Remaining i3+: the command sheet, and focus/typewriter (need a custom
+  text surface, like the desktop widget) + undo/selection through core.
   NOTE: the iced 'polaris' crate does NOT build for iOS — apple/ is a
   separate front-end; keep them independent.
   Gate: owner needs Apple Developer account + Xcode for on-device builds
