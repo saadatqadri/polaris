@@ -55,8 +55,11 @@ struct WritingView: View {
             Divider()
             Label("Focus — soon", systemImage: "circle.dashed")
         } label: {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 17, weight: .medium))
+            // The north-star glyph ✧ (not SF `sparkle` — that reads as "AI",
+            // which Polaris is the opposite of). Kept in `quiet`, never the
+            // star-blue accent (reserved for cursor/selection).
+            Text("\u{2727}")
+                .font(.system(size: 20))
                 .foregroundStyle(Tokens.quiet(dark))
                 .frame(width: 46, height: 46)
                 .background(Tokens.bg(dark))
