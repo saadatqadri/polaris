@@ -129,8 +129,12 @@ differs.
   quotes with the whisper bar, code in Mono, rules). Invoked two ways per
   the DESIGN iPad-interaction decision: **Cmd+P** (hardware keyboard, same
   as desktop — verified toggling on the simulator) and a **horizontal
-  swipe** (touch). The summoned command sheet + the remaining modes
-  (focus/typewriter, which need a custom text surface) are next.
+  swipe**. Then (2026-07-14) a **floating modes control** replaced the
+  finicky swipe: a quiet bottom-trailing button summons a menu with
+  Preview (⌘P), Typewriter (⌘Y), and Hemingway (⌘E) — the modes that work
+  on the native UITextView (typewriter holds the caret at 45%; Hemingway
+  blocks deletions). Focus dimming needs per-paragraph styling (later);
+  find/drafts/publish join the menu as they land.
 - **i4 — Drafts + publish.** FFI to `polaris-drafts`; the publish targets.
 - **Later:** custom text view for writing modes; iPhone layout.
 

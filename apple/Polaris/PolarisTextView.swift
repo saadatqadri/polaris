@@ -2,8 +2,9 @@
 // at input time (through polaris-core) and typography is exact. Edits write
 // back to the bound text; DocumentGroup persists them (autosave).
 //
-// This is the iOS analog of the desktop's owned editor widget — i2 wires
-// smart punctuation and core-driven word count; the writing modes are later.
+// Writing modes that don't need custom rendering live here: Hemingway
+// (block deletions) and typewriter scrolling (hold the caret line steady).
+// Focus dimming needs per-paragraph styling — a later, larger step.
 
 import SwiftUI
 import UIKit
@@ -11,6 +12,8 @@ import UIKit
 struct PolarisTextView: UIViewRepresentable {
     @Binding var text: String
     var dark: Bool
+    var hemingway: Bool = false
+    var typewriter: Bool = false
     var autofocus: Bool = false
 
     func makeUIView(context: Context) -> UITextView {
@@ -31,8 +34,8 @@ struct PolarisTextView: UIViewRepresentable {
     }
 
     func updateUIView(_ tv: UITextView, context: Context) {
-        // Only push external changes (e.g. a reload); never clobber the caret
-        // during live typing.
+        context.coordinator.hemingway = hemingway
+        context.coordinator.typewriter = typewriter
         if tv.text != text && !tv.isFirstResponder {
             tv.text = text
         }
@@ -55,14 +58,20 @@ struct PolarisTextView: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextViewDelegate {
         @Binding var text: String
+        var hemingway = false
+        var typewriter = false
         init(text: Binding<String>) { _text = text }
 
-        // Smart punctuation at input time, via polaris-core.
         func textView(
             _ tv: UITextView,
             shouldChangeTextIn range: NSRange,
             replacementText replacement: String
         ) -> Bool {
+            // Hemingway: forward only — block deletions and range replacements.
+            if hemingway && replacement.isEmpty {
+                return false
+            }
+            // Smart punctuation at input time, via polaris-core.
             guard replacement.count == 1 else { return true }
             let full = tv.text as NSString
             let before = full.substring(to: range.location)
@@ -84,6 +93,27 @@ struct PolarisTextView: UIViewRepresentable {
 
         func textViewDidChange(_ tv: UITextView) {
             text = tv.text
+            if typewriter { holdCaret(tv) }
+        }
+
+        func textViewDidChangeSelection(_ tv: UITextView) {
+            if typewriter { holdCaret(tv) }
+        }
+
+        // Typewriter scrolling: keep the caret line at ~45% of the viewport.
+        private func holdCaret(_ tv: UITextView) {
+            guard let range = tv.selectedTextRange else { return }
+            let caret = tv.caretRect(for: range.end)
+            guard caret.origin.y.isFinite else { return }
+            let target = tv.bounds.height * 0.45
+            let desired = caret.midY - target
+            let maxOffset = max(-tv.adjustedContentInset.top,
+                                tv.contentSize.height - tv.bounds.height
+                                    + tv.adjustedContentInset.bottom)
+            let y = min(max(desired, -tv.adjustedContentInset.top), maxOffset)
+            if abs(tv.contentOffset.y - y) > 0.5 {
+                tv.setContentOffset(CGPoint(x: 0, y: y), animated: false)
+            }
         }
     }
 }

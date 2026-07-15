@@ -112,18 +112,16 @@ The desktop is keyboard-first; the iPad honours that in two tiers so
   shortcuts**, registered as `UIKeyCommand`s. They work identically to the
   Mac, and iPadOS's hold-`⌘` overlay documents them automatically. No
   compromise.
-- **Touch-only**: two affordances, nothing persistent on the page.
-  - **Horizontal swipe** toggles write ⟷ preview — the spatial form of
-    "the same page re-set, a mode switch not a split."
-  - **Tap the chrome (or swipe down from the top)** summons a quiet
-    **command sheet** — the modes and actions as a list, *each row showing
-    its `⌘` shortcut* (so it teaches the keyboard path and gives keyboard
-    users a discoverable palette, opened with `⌘/`). It dismisses on pick;
-    the welcome tour introduces the swipe + summon.
+- **Touch-only**: a **small floating control** (bottom-trailing, quiet)
+  summons the **modes menu** — the modes as a list with their state and
+  `⌘` shortcut, so it teaches the keyboard path. (A full-screen horizontal
+  swipe was tried first and removed 2026-07-14 — it fought text selection.
+  A floating summon is calmer and unambiguous.)
 
-One surface, both input types, self-teaching. Focus/typewriter on iPad
-need the custom text view (like the desktop widget) before they can be
-offered; preview + find + drafts + publish are the first sheet entries.
+One surface, both input types, self-teaching. Landed 2026-07-14: Preview,
+Typewriter, and Hemingway (the modes that work on the native UITextView).
+Focus dimming needs per-paragraph styling — a later step; find, drafts,
+and publish join the menu as they land on iPad.
 
 ## Implementation notes (iced)
 
