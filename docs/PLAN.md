@@ -63,39 +63,31 @@ writing to stay theirs.
 
 ---
 
-## 2. Where we are
+## 2. Where we are (2026-07-15)
 
-**Shipped (TUI MVP, ~1,200 lines of Rust):**
+The sections below (§3–§4) are the historical design record of the GUI
+refactor — kept because the architecture decisions still hold. Current
+status, condensed (see `CLAUDE.md` for the working handover):
 
-- ratatui/crossterm terminal editor: char editing, arrow navigation,
-  save / save-as, status bar, markdown preview mode
-- `~/.polaris.toml` config (Notion token + default page)
-- Markdown → Notion blocks (pulldown-cmark → Notion API JSON): headings,
-  paragraphs, bulleted lists, code blocks, quotes, dividers, inline code
-- Notion deploy with append/replace modes (CLI `polaris deploy` and Ctrl+D)
-- clap CLI: `new` / `deploy` / `config`
+**Desktop (Rust/iced) — Phases 1–3 COMPLETE, released `v0.2.3`.** A Cargo
+workspace (`polaris-core`, `polaris-notion`, `polaris-drafts`,
+`polaris-ffi`, `polaris`): the custom editor widget with Document as the
+single source of truth, silent autosave, find, rename, deploy to Notion,
+preview, the writing modes (typewriter/focus/Hemingway/zen/goals), and
+drafts (mark/browse/word-diff/restore). `install.sh` + tag-triggered
+releases; welcome tour; CI green on every push.
 
-**Known debt:**
+**iPad (SwiftUI over the core) — Phase 6 pulled forward, i0–i3 + modes
+running on the owner's device.** `apple/` is a native SwiftUI DocumentGroup
+app over `polaris-core` via the uniffi FFI (see `docs/IOS.md`): the page,
+smart punctuation, preview, and a floating ✧ modes control
+(Preview/Typewriter/Hemingway). Focus mode + TestFlight are follow-ons.
 
-| Issue | Where | Disposition |
-|---|---|---|
-| Byte-indexed editing panics on non-ASCII input | `src/editor/buffer.rs` | **Fixed 2026-07-05** (char-indexed, with tests). M1's rope rewrite still replaces this buffer wholesale |
-| No word wrap, no undo | TUI editor | Superseded by GUI (Phase 1) |
-| `clear_page_blocks` reads only first page of blocks (no pagination cursor) | `src/notion/client.rs` | **Fixed 2026-07-05** (cursor pagination; delete errors now propagate) |
-| Bold/italic map to plain text in Notion | `src/notion/blocks.rs` | **Fixed in M5** (rich-text annotations) |
-| `create_page` is dead code | `src/notion/client.rs` | **Deleted in M5** |
-| No CI | repo | CI + committed lockfile land with M1 |
+**Next: Phase 4** (§5) — publish-anywhere (Hugo + Substack first) and the
+accept/reject editing workflow — plus the rest of the MVP.
 
-Also fixed 2026-07-05, with 30 unit tests (TUI buffer semantics + blocks
-converter): `polaris new` clobbering existing files, unusable quit-confirm,
-Ctrl+D deploying the stale on-disk copy (now saves first, appends, and works
-from every launch path), Esc not leaving preview, ordered lists flattening to
-bullets, and paragraphs after headings being merged into the heading block.
-The buffer tests double as the acceptance suite for M1's rope rewrite.
-
-**Decided:** pivot the front-end from TUI to a GUI, because a terminal cannot
-control fonts and typography is a core product value. Design phase is complete
-(`design/`), approved in principle; two open questions in §7.
+The TUI MVP that started this project was superseded by the GUI and deleted
+at M5; its early bug fixes and the original Notion debt are all resolved.
 
 ---
 

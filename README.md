@@ -247,10 +247,11 @@ system in [`design/DESIGN.md`](design/DESIGN.md) with a typeable mock at
   word-level diffs, one-key restore — content-addressed store, no git
 - [ ] **Phase 4** — accept/reject editing workflow; Write Once, Publish
   Anywhere: Hugo and Substack (named priorities), then HTML/PDF, LinkedIn
-- [ ] **Phase 5** — ship it: signed/notarized `.app`, Homebrew tap, quiet
-  updates (prebuilt releases + installer already live)
-- [ ] **Phase 6** — iOS: iPad first, then iPhone — native front-end over
-  `polaris-core` via FFI, documents in the Files app
+- [~] **Phase 5** — ship it: prebuilt releases + one-line installer live;
+  signed/notarized `.app`, Homebrew tap, quiet updates still to come
+- [~] **Phase 6** — iOS (iPad first): **running on device** — native
+  SwiftUI over `polaris-core` via FFI; page, smart punctuation, preview,
+  and Preview/Typewriter/Hemingway modes. Focus mode + TestFlight next.
 
 **A note on AI:** Polaris will never generate, autocomplete, or ghost-write
 text. Every word in a Polaris document is typed by a person.
