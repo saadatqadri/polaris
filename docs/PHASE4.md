@@ -430,11 +430,17 @@ Part C slots in independently — it only touches the preview surface:
   both. **Deferred:** Left/Right sentence-stepping within a block (design #6)
   — block-level Up/Down is the shipped core; scroll-follow is the existing
   caret-ratio approximation, not pixel-exact.
-- **P6 — inline notes.** Note model + sidecar in `polaris-drafts`,
-  re-anchoring, the margin rendering, N/[/]/X keybindings, Cmd+M freeze,
-  Cmd+Shift+N toggle. **Done when:** you can note a span in preview, edit
-  the prose, watch the note follow (or orphan gracefully), mark a draft, and
-  see the notes frozen with it.
+- **P6 — inline notes. ✅ SHIPPED 2026-07-16.** `NoteStore` in
+  `polaris-drafts` (persist `notes/live.json`, re-anchor by quote to the
+  nearest occurrence, `freeze_to(<draft-id>.json)`), notes rendered beneath
+  their block in preview, N add/edit · [/] jump · x resolve · Shift+X delete
+  · Cmd+Shift+N toggle, re-anchor on entering preview, Cmd+M freezes the live
+  notes with the marked draft. **Scoped for v1:** notes anchor at **block**
+  granularity (not sub-sentence — preview has no in-block caret), the anchor
+  quote is the block's first line (resilient to edits later in the block),
+  and the note body renders *beneath* its block rather than in a true right
+  margin (the right-margin layout, and the iPad tap-to-reveal variant from
+  open questions #8/#9, are deferred). Empty note body deletes.
 
 P5 is a natural first pick — it's small, GUI-only, and it makes preview
 navigable immediately; P6 depends on P5 (notes anchor via the same offset

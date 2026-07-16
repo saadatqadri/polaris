@@ -86,9 +86,14 @@ Phase 4 is the big remaining MVP arc. Design doc: **`docs/PHASE4.md`**
 - **Accept/reject editing workflow** (P3) — import an edited copy → word-level
   diff → accept/reject each change (Draft's model, no server), reusing the
   `polaris-drafts` diff. Bound up with the AI.md critique pass (Phase 4+).
-- **Part C — Preview additions:** a reading pointer (P5, keeps your place +
-  arrow-key nav, round-trips the caret on Cmd+P) and inline notes (P6, the
-  human-first face of the AI.md margin).
+- **Part C — Preview additions, both shipped:** the reading pointer (P5 —
+  keeps your place + arrow-key nav, round-trips the caret on Cmd+P) and
+  **inline notes** (P6 — N adds a block note in preview, [/] jump, x resolve,
+  Shift+X delete, Cmd+Shift+N hide; `NoteStore` in `polaris-drafts` persists
+  `.polaris/<name>/notes/live.json`, re-anchors by quote, Cmd+M freezes notes
+  with the draft). The human-first face of the AI.md margin — notes live in
+  the sidecar, never the buffer. v1 is block-granular; sub-sentence anchors +
+  true right-margin layout deferred.
 - These halves are independent of each other and of iOS.
 
 iOS follow-ons (not blocking Phase 4): Focus mode (custom text surface),
