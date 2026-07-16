@@ -193,10 +193,11 @@ paste. Revisit only if API access becomes realistic.
   clipboard targets return the *body* to the app rather than touching the
   clipboard inside the pure crate — keeps `polaris-publish` I/O-light.
 
-  > Note: clipboard targets need the app to place text on the clipboard. The
-  > trait returns `Outcome::Clipboard { hint }` and the rendered body via a
-  > side channel (e.g. `Outcome::Clipboard { hint, body }`) — resolve the
-  > exact shape in P1 so the pure crate never links a clipboard backend.
+  > Resolved in P1: clipboard targets return `Outcome::Clipboard { hint,
+  > body }` — the rendered `body` travels in the variant, and the *app*
+  > (GUI/CLI) is what places it on the clipboard, so the pure crate links no
+  > clipboard backend. No clipboard targets exist yet (P2); the plumbing is
+  > in place.
 
 ---
 
@@ -395,12 +396,19 @@ Tables ✓ and code blocks ✓ already. Still open, and settled here:
 Part A and Part B are independent. Recommended order — Part A first, because
 it's the business direction and it forces the refactor everything else needs:
 
-- **P1 — the publish layer + Hugo.** `polaris-publish` crate, `Target`
-  trait, `Outcome`, config `[targets.*]`, Notion migrated in behind the
-  trait (proves the abstraction against both a file target and an API
-  target), the Cmd+D registry + picker, `polaris publish` CLI. **Done when:**
-  Cmd+D to Hugo writes a correctly front-mattered file and Cmd+D to Notion
-  still works, both through one code path.
+- **P1 — the publish layer + Hugo. ✅ SHIPPED 2026-07-16.**
+  `polaris-publish` crate (`Target` trait, `Doc`, `Outcome`, Notion + Hugo
+  adapters, all unit-tested); config gained `[hugo]` + `default_target`
+  (`[notion]` untouched for back-compat); a binary-side registry maps config
+  → `Vec<Box<dyn Target>>`; Cmd+D fires through with one target and shows a
+  ✧ picker with ≥2; `polaris publish [--to id] [--force] <file>` CLI (with
+  `deploy` kept as the append/replace Notion path). Two decisions made in
+  build: **(a)** Notion migrated behind the trait *without* touching the
+  existing `deploy` command or `[notion]` config, keeping the blast radius
+  small; **(b)** Hugo strips a leading title H1 from the body — the title
+  lives in front matter, and keeping the H1 would double the heading on the
+  rendered page (open question about front-matter format still open — we
+  shipped TOML `+++`).
 - **P2 — Substack paste + LinkedIn + HTML/PDF.** The markdown→HTML renderer
   (shared by Substack paste, HTML export, and PDF), clipboard outcomes,
   LinkedIn formatting. **Done when:** Cmd+D offers a picker and each target

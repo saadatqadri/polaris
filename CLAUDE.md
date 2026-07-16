@@ -25,14 +25,16 @@ handover; the full plan is **`docs/PLAN.md`**.
 Design source of truth: **`design/DESIGN.md`** (tokens, type, keyboard maps,
 iPad interaction) + **`design/mockup.html`**.
 
-## Where we are (2026-07-15)
+## Where we are (2026-07-16)
 
-**Desktop (Rust/iced) — Phases 1–3 COMPLETE, released `v0.2.3`.**
+**Desktop (Rust/iced) — Phases 1–3 COMPLETE, released `v0.2.3`; Phase 4 P1
+(publish layer) shipped since.**
 - Cargo workspace: `polaris-core` (rope buffer, grapheme cursors, grouped
   undo, autosave policy, word count, typography), `polaris-notion`
   (markdown→blocks + API), `polaris-drafts` (content-addressed snapshots +
-  word diff), `polaris-ffi` (uniffi bridge for iOS), `polaris` (the iced GUI
-  + clap CLI).
+  word diff), `polaris-publish` (the `Target` trait + Notion/Hugo adapters —
+  Phase 4 P1), `polaris-ffi` (uniffi bridge for iOS), `polaris` (the iced
+  GUI + clap CLI).
 - **Phase 1:** the editor — silent autosave, find, save-as, rename, deploy
   to Notion, preview, themes.
 - **Phase 2:** custom editor widget (Document is the single source of truth;
@@ -68,18 +70,26 @@ DONE, running on the owner's physical iPad.** (`apple/`, docs/IOS.md.)
 
 ## What's next — Phase 4 + the rest of the MVP
 
-Phase 4 is the big remaining MVP arc; nothing in it is started:
+Phase 4 is the big remaining MVP arc. Design doc: **`docs/PHASE4.md`**
+(approved 2026-07-16). **P1 shipped** — the rest is open.
 - **Write Once, Publish Anywhere** (owner direction, eventual business model).
-  Named priorities: **Hugo** (saadatqadri.com — front matter + write into
-  `content/`, no git automation v1) and **Substack** (no publishing API: v1
-  format-and-paste, then investigate email-to-draft). Then HTML/PDF, LinkedIn
-  (API-restricted: format+copy v1). `polaris-notion` generalizes into a
-  `publish` layer of target adapters (markdown in, platform out). Full spec
-  in PLAN §5 Phase 4.
-- **Accept/reject editing workflow** — import an edited copy → word-level diff
-  → accept/reject each change (Draft's model, no server). Bound up with the
-  AI.md critique pass (Phase 4+).
-- These two halves are independent of each other and of iOS.
+  **P1 done:** new `polaris-publish` crate — one `Target` trait (markdown
+  `Doc` in, `Outcome` out), Notion + Hugo adapters. Cmd+D goes through a
+  config-built registry (one target fires through, ≥2 show a ✧ picker);
+  `polaris publish [--to id] [--force]` CLI; `[hugo]` + `default_target` in
+  `~/.polaris.toml` (`[notion]` unchanged); `deploy` kept as the Notion
+  append/replace path. Hugo = front matter + write into `content/`, strips
+  the leading title H1, no git automation. **Next targets (P2):** Substack
+  (v1 format-and-paste → clipboard, then email-to-draft), HTML/PDF, LinkedIn
+  (format+copy). Clipboard plumbing (`Outcome::Clipboard { hint, body }`,
+  app does the copy) is in place, unused until P2.
+- **Accept/reject editing workflow** (P3) — import an edited copy → word-level
+  diff → accept/reject each change (Draft's model, no server), reusing the
+  `polaris-drafts` diff. Bound up with the AI.md critique pass (Phase 4+).
+- **Part C — Preview additions:** a reading pointer (P5, keeps your place +
+  arrow-key nav, round-trips the caret on Cmd+P) and inline notes (P6, the
+  human-first face of the AI.md margin).
+- These halves are independent of each other and of iOS.
 
 iOS follow-ons (not blocking Phase 4): Focus mode (custom text surface),
 undo/selection through core, drafts + publish on iPad, TestFlight for the
