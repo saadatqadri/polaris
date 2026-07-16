@@ -3131,6 +3131,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "polaris-publish"
+version = "0.2.3"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "polaris-notion",
+ "tempfile",
+ "tokio",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "polling"
 version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

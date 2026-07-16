@@ -5,6 +5,7 @@ members = [
     "crates/polaris-drafts",
     "crates/polaris-ffi",
     "crates/polaris-notion",
+    "crates/polaris-publish",
     "crates/polaris",
 ]
 

@@ -1,0 +1,19 @@
+[package]
+name = "polaris-publish"
+description = "Publish-target adapters (markdown in, platform out) for Polaris"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+polaris-notion = { path = "../polaris-notion" }
+anyhow.workspace = true
+async-trait = "0.1"
+toml = "0.8"
+chrono = "0.4"
+
+[dev-dependencies]
+tokio = { version = "1.35", features = ["macros", "rt"] }
+tempfile = "3"
