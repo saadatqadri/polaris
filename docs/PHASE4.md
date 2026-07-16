@@ -421,10 +421,15 @@ it's the business direction and it forces the refactor everything else needs:
 
 Part C slots in independently — it only touches the preview surface:
 
-- **P5 — the reading pointer.** Source↔rendered offset map, the margin
-  marker, arrow-key nav, position round-trip on Cmd+P/Esc. **Done when:**
-  entering preview lands the pointer at the caret, arrows walk the doc, and
-  leaving preview puts the caret where you were reading.
+- **P5 — the reading pointer. ✅ SHIPPED 2026-07-16.** A slim accent rule in
+  a reserved left gutter marks the current block; Up/Down walk it; the
+  pointer owns a source byte offset (`Buffer::byte_to_char`/`char_to_byte`
+  bridge the parser's byte offsets to char cursors) so Cmd+P round-trips the
+  caret both ways. One walker (`preview::render_blocks`) feeds both the
+  renderer and the offset map, so a pointer index means the same block in
+  both. **Deferred:** Left/Right sentence-stepping within a block (design #6)
+  — block-level Up/Down is the shipped core; scroll-follow is the existing
+  caret-ratio approximation, not pixel-exact.
 - **P6 — inline notes.** Note model + sidecar in `polaris-drafts`,
   re-anchoring, the margin rendering, N/[/]/X keybindings, Cmd+M freeze,
   Cmd+Shift+N toggle. **Done when:** you can note a span in preview, edit
