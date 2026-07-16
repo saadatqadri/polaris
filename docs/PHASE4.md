@@ -441,9 +441,11 @@ touches no publish or diff code.
 
 # Open questions (owner input welcome)
 
-1. **Hugo front matter: TOML `+++` or YAML `---`?** TOML matches our config
-   idiom and Hugo's own default is configurable; proposed TOML. Also: which
-   `content/` subdir default — `content/posts`?
+1. **Hugo front matter: TOML `+++` or YAML `---`?** **Decided 2026-07-16:
+   TOML `+++`** (shipped in P1) — matches Polaris's own config idiom. There
+   is no `content/` subdir default: `content_dir` in `[hugo]` is the exact
+   directory Polaris writes into, so the writer points it wherever they like
+   (e.g. `.../content/posts`).
 2. **Slug source:** title-derived (proposed) or the source filename? Title
    reads better in URLs; filename is predictable. Proposed: title, with the
    filename as fallback when there's no H1.
