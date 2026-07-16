@@ -43,6 +43,18 @@ impl Buffer {
         self.rope.line_to_char(line_idx)
     }
 
+    /// Char index for a byte offset (clamped). Bridges byte-based tools
+    /// (e.g. the markdown parser) back to char-based cursor positions.
+    pub fn byte_to_char(&self, byte_idx: usize) -> usize {
+        self.rope.byte_to_char(byte_idx.min(self.rope.len_bytes()))
+    }
+
+    /// Byte offset for a char index (clamped). The inverse of
+    /// [`byte_to_char`](Self::byte_to_char).
+    pub fn char_to_byte(&self, char_idx: usize) -> usize {
+        self.rope.char_to_byte(char_idx.min(self.rope.len_chars()))
+    }
+
     /// Line text, including any trailing newline.
     pub fn line(&self, line_idx: usize) -> String {
         self.rope.line(line_idx).to_string()
@@ -101,6 +113,22 @@ mod tests {
         b.insert(4, "!");
         assert_eq!(b.to_string(), "café!");
         assert_eq!(b.len_chars(), 5);
+    }
+
+    #[test]
+    fn byte_char_conversions_roundtrip_through_multibyte() {
+        let b = Buffer::from_str("aé→b"); // a=1B, é=2B, →=3B, b=1B
+                                          // Char starts land on bytes 0,1,3,6.
+        assert_eq!(b.char_to_byte(0), 0);
+        assert_eq!(b.char_to_byte(1), 1);
+        assert_eq!(b.char_to_byte(2), 3);
+        assert_eq!(b.char_to_byte(3), 6);
+        for c in 0..=b.len_chars() {
+            assert_eq!(b.byte_to_char(b.char_to_byte(c)), c);
+        }
+        // Both clamp instead of panicking past the end.
+        assert_eq!(b.char_to_byte(999), b.char_to_byte(b.len_chars()));
+        assert_eq!(b.byte_to_char(999), b.len_chars());
     }
 
     #[test]

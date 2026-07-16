@@ -121,6 +121,11 @@ struct App {
     epoch: Instant,
     autosave: AutosaveTimer,
     view_mode: ViewMode,
+    /// Preview reading pointer: the block it marks and the source byte offset
+    /// of each block (in view order), captured on entering preview so Up/Down
+    /// can walk the doc and Cmd+P can round-trip the caret.
+    preview_pointer: usize,
+    preview_offsets: Vec<usize>,
     /// Chrome opacity: fades toward 0 while typing, back to 1 at rest.
     chrome_alpha: f32,
     last_key_ms: Option<u64>,
@@ -165,6 +170,8 @@ enum Message {
     AutosaveTick,
     FadeTick,
     TogglePreview,
+    /// Move the preview reading pointer by ±1 block (Up/Down in preview).
+    PreviewPointer(i32),
     ToggleTheme,
     PublishOpen,
     /// Move the target-picker selection (only meaningful while the Publish
@@ -224,6 +231,8 @@ impl App {
             epoch: Instant::now(),
             autosave: AutosaveTimer::default(),
             view_mode: ViewMode::Write,
+            preview_pointer: 0,
+            preview_offsets: Vec::new(),
             chrome_alpha: 1.0,
             last_key_ms: None,
             pending_revert: None,
@@ -371,25 +380,40 @@ impl App {
                 ViewMode::Write => {
                     self.view_mode = ViewMode::Preview;
                     self.chrome_alpha = 1.0;
-                    // Approximate scroll preservation: land at the caret's
-                    // relative position in the document.
-                    let line = self.doc.buffer().char_to_line(self.doc.cursor().pos) as f32;
-                    let total = self.doc.buffer().len_lines().max(2) as f32;
-                    iced::widget::operation::snap_to(
-                        PREVIEW_SCROLL_ID,
-                        scrollable::RelativeOffset {
-                            x: 0.0,
-                            y: (line / (total - 1.0)).clamp(0.0, 1.0),
-                        },
-                    )
+                    // Map the caret to a block so the pointer starts where you
+                    // were writing, and remember every block's source offset.
+                    let source = self.doc.text();
+                    self.preview_offsets =
+                        preview::block_offsets(&source, theme::tokens(self.dark));
+                    let caret_byte = self.doc.buffer().char_to_byte(self.doc.cursor().pos);
+                    self.preview_pointer = self
+                        .preview_offsets
+                        .iter()
+                        .rposition(|&start| start <= caret_byte)
+                        .unwrap_or(0);
+                    self.preview_snap_task()
                 }
                 ViewMode::Preview => {
+                    // Leaving lands the caret where you were reading.
+                    if let Some(&byte) = self.preview_offsets.get(self.preview_pointer) {
+                        let pos = self.doc.buffer().byte_to_char(byte);
+                        self.doc.set_cursor_pos(pos, false);
+                    }
                     self.view_mode = ViewMode::Write;
                     Task::none()
                 }
                 // Preview toggle is inert in the drafts views.
                 ViewMode::Drafts | ViewMode::DraftView => Task::none(),
             },
+            Message::PreviewPointer(delta) => {
+                if self.view_mode == ViewMode::Preview && !self.preview_offsets.is_empty() {
+                    let last = self.preview_offsets.len() as i32 - 1;
+                    self.preview_pointer =
+                        (self.preview_pointer as i32 + delta).clamp(0, last) as usize;
+                    return self.preview_snap_task();
+                }
+                Task::none()
+            }
             Message::Save => {
                 if self.doc.path().is_none() {
                     self.open_overlay(Overlay::SaveAs)
@@ -991,6 +1015,22 @@ impl App {
         Task::none()
     }
 
+    /// Scroll preview so the pointed block is roughly in view — the same
+    /// caret-ratio approximation preview has always used, keyed to the
+    /// pointer's block index rather than a raw line.
+    fn preview_snap_task(&self) -> Task<Message> {
+        let len = self.preview_offsets.len();
+        let y = if len > 1 {
+            (self.preview_pointer as f32 / (len - 1) as f32).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        iced::widget::operation::snap_to(
+            PREVIEW_SCROLL_ID,
+            scrollable::RelativeOffset { x: 0.0, y },
+        )
+    }
+
     /// Save, then publish the target at `index` in `publish_targets`,
     /// consuming the built list. Reached by Cmd+D fire-through (one target)
     /// or the picker's Enter.
@@ -1234,7 +1274,7 @@ impl App {
                 // edge, clear of the text); the column centers inside it.
                 let source = self.doc.text();
                 let column_content =
-                    container(preview::view(&source, t))
+                    container(preview::view(&source, t, Some(self.preview_pointer)))
                         .max_width(600)
                         .padding(Padding {
                             top: 4.0,
@@ -1533,11 +1573,12 @@ fn preview_key_events(
             keyboard::Key::Character("p") if modifiers.command() => Some(Message::TogglePreview),
             keyboard::Key::Character("t") if modifiers.command() => Some(Message::ToggleTheme),
             keyboard::Key::Character("s") if modifiers.command() => Some(Message::Save),
+            // Up/Down walk the reading pointer; PageUp/Down still free-scroll.
             keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
-                Some(Message::ScrollBy(PREVIEW_SCROLL_ID, -60.0))
+                Some(Message::PreviewPointer(-1))
             }
             keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
-                Some(Message::ScrollBy(PREVIEW_SCROLL_ID, 60.0))
+                Some(Message::PreviewPointer(1))
             }
             keyboard::Key::Named(keyboard::key::Named::PageUp) => {
                 Some(Message::ScrollBy(PREVIEW_SCROLL_ID, -600.0))
@@ -1905,6 +1946,33 @@ mod tests {
         assert!(app.chrome_alpha > 0.2);
         let _ = app.update(Message::TogglePreview);
         assert_eq!(app.view_mode, ViewMode::Write);
+    }
+
+    #[test]
+    fn preview_pointer_maps_caret_to_block_and_round_trips_it() {
+        let (mut app, _) = App::boot(None, false);
+        let text = "# Title\n\nAlpha para.\n\nBeta para.\n\nGamma para.\n";
+        type_into(&mut app, text);
+        // Caret into "Beta para." (ASCII here, so byte == char index).
+        let beta = text.find("Beta").unwrap();
+        app.doc.set_cursor_pos(beta, false);
+
+        // Entering preview starts the pointer on the caret's block: blocks are
+        // heading(0), Alpha(1), Beta(2), Gamma(3).
+        let _ = app.update(Message::TogglePreview);
+        assert_eq!(app.view_mode, ViewMode::Preview);
+        assert_eq!(app.preview_pointer, 2);
+
+        // Up/Down clamp within the block list.
+        let _ = app.update(Message::PreviewPointer(1));
+        assert_eq!(app.preview_pointer, 3);
+        let _ = app.update(Message::PreviewPointer(1));
+        assert_eq!(app.preview_pointer, 3, "clamps at the last block");
+
+        // Leaving lands the caret where the pointer was reading.
+        let _ = app.update(Message::TogglePreview);
+        assert_eq!(app.view_mode, ViewMode::Write);
+        assert_eq!(app.doc.cursor().pos, text.find("Gamma").unwrap());
     }
 
     #[test]
