@@ -35,15 +35,76 @@ struct Block<'a, M> {
     source: usize,
 }
 
+/// A note to render beneath the block it is anchored to. `block` is a block
+/// index in view order; the GUI resolves it from the note's source offset.
+pub struct NoteMark {
+    pub block: usize,
+    pub body: String,
+    pub resolved: bool,
+    pub detached: bool,
+}
+
 /// Render the markdown, drawing the reading-pointer marker beside the block
-/// at `pointer` (if any). A mode switch, not a split.
-pub fn view<'a, M: 'a>(source: &str, t: theme::Tokens, pointer: Option<usize>) -> Element<'a, M> {
-    let rows = render_blocks::<M>(source, t)
+/// at `pointer` (if any) and any `notes` beneath their blocks. A mode switch,
+/// not a split.
+pub fn view<'a, M: 'a>(
+    source: &str,
+    t: theme::Tokens,
+    pointer: Option<usize>,
+    notes: &[NoteMark],
+) -> Element<'a, M> {
+    let blocks = render_blocks::<M>(source, t);
+    let mut by_block: Vec<Vec<&NoteMark>> = vec![Vec::new(); blocks.len()];
+    for note in notes {
+        if note.block < by_block.len() {
+            by_block[note.block].push(note);
+        }
+    }
+
+    let rows = blocks
         .into_iter()
         .enumerate()
-        .map(|(i, block)| gutter_row(block.element, pointer == Some(i), t))
+        .map(|(i, block)| {
+            let row = gutter_row(block.element, pointer == Some(i), t);
+            if by_block[i].is_empty() {
+                row
+            } else {
+                let mut stack = column![row].spacing(6);
+                for note in &by_block[i] {
+                    stack = stack.push(note_element(note, t));
+                }
+                stack.into()
+            }
+        })
         .collect::<Vec<_>>();
     column(rows).spacing(16).width(Fill).into()
+}
+
+/// A note beneath its block: iA Mono, quiet, indented to align with the
+/// block's text. Resolved and detached notes read even quieter.
+fn note_element<'a, M: 'a>(note: &NoteMark, t: theme::Tokens) -> Element<'a, M> {
+    let prefix = if note.detached {
+        "· detached — "
+    } else if note.resolved {
+        "✓ "
+    } else {
+        "◦ "
+    };
+    let color = if note.resolved || note.detached {
+        t.whisper
+    } else {
+        t.quiet
+    };
+    row![
+        space().width(GUTTER_W),
+        text(format!("{prefix}{}", note.body))
+            .font(fonts::MONO)
+            .size(12)
+            .line_height(text::LineHeight::Relative(1.5))
+            .color(color),
+    ]
+    .width(Fill)
+    .into()
 }
 
 /// The source byte offset of each rendered block, in view order. Shares the

@@ -17,7 +17,7 @@ One quiet page. Everything saves itself.
 
 | Key | Does |
 |-----|------|
-| Cmd+P | Preview — this page, typeset (arrows scroll; Esc returns) |
+| Cmd+P | Preview — this page, typeset (↑↓ move the reading pointer; Esc returns) |
 | Cmd+F | Find (Enter cycles matches) |
 | Cmd+S | Save now, or name an untitled file |
 | Cmd+R | Rename the file |
@@ -41,6 +41,13 @@ Your document quietly keeps its history. **Cmd+M** names a version
 diffs — R restores, and even that is one Cmd+Z from undone.
 
 > Write with the door closed, rewrite with the door open.
+
+## Review
+
+In preview, be your own editor. **N** leaves an inline note on the block the
+pointer is on — "cut this," "check this number"; **[** and **]** jump between
+notes, **x** resolves one, **Cmd+Shift+N** hides them for a clean read. Notes
+live beside the file, never in it — your prose stays only yours.
 
 ## Publish
 

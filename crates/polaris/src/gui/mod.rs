@@ -22,7 +22,7 @@ use iced::{
 };
 
 use polaris_core::{typography, AutosaveTimer, Document};
-use polaris_drafts::{word_diff, DiffKind, DraftStore, Kind as DraftKind};
+use polaris_drafts::{word_diff, DiffKind, DraftStore, Kind as DraftKind, NoteStore};
 
 const CHROME_INPUT_ID: &str = "chrome-input";
 const PREVIEW_SCROLL_ID: &str = "preview-scroll";
@@ -79,6 +79,8 @@ enum Overlay {
     Goal,
     /// Cmd+M: name and mark a draft (docs/DRAFTS.md).
     Mark,
+    /// N in preview: write (or edit) an inline note on the current block.
+    Note,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +128,12 @@ struct App {
     /// can walk the doc and Cmd+P can round-trip the caret.
     preview_pointer: usize,
     preview_offsets: Vec<usize>,
+    /// Inline notes for this document (None while untitled). Notes render in
+    /// preview beneath their block; `notes_visible` toggles them (Cmd+Shift+N);
+    /// `note_edit_id` is set while editing an existing note rather than adding.
+    note_store: Option<NoteStore>,
+    notes_visible: bool,
+    note_edit_id: Option<String>,
     /// Chrome opacity: fades toward 0 while typing, back to 1 at rest.
     chrome_alpha: f32,
     last_key_ms: Option<u64>,
@@ -172,6 +180,17 @@ enum Message {
     TogglePreview,
     /// Move the preview reading pointer by ±1 block (Up/Down in preview).
     PreviewPointer(i32),
+    /// N in preview: open the note input for the current block (edit if it
+    /// already has one).
+    NoteOpen,
+    /// [ / ] — move the pointer to the previous/next block that has a note.
+    NoteJump(i32),
+    /// x — resolve/unresolve the current block's note.
+    NoteResolve,
+    /// Shift+X — delete the current block's note.
+    NoteDelete,
+    /// Cmd+Shift+N — show/hide notes in preview.
+    ToggleNotes,
     ToggleTheme,
     PublishOpen,
     /// Move the target-picker selection (only meaningful while the Publish
@@ -233,6 +252,9 @@ impl App {
             view_mode: ViewMode::Write,
             preview_pointer: 0,
             preview_offsets: Vec::new(),
+            note_store: None,
+            notes_visible: true,
+            note_edit_id: None,
             chrome_alpha: 1.0,
             last_key_ms: None,
             pending_revert: None,
@@ -280,7 +302,9 @@ impl App {
         if self.overlay != Overlay::None {
             subs.push(event::listen_with(overlay_key_events));
         }
-        if self.view_mode == ViewMode::Preview {
+        // Preview's own keys yield to an open overlay (e.g. the note input),
+        // so typing a note isn't swallowed as note commands.
+        if self.view_mode == ViewMode::Preview && self.overlay == Overlay::None {
             subs.push(event::listen_with(preview_key_events));
         }
         if self.view_mode == ViewMode::Drafts {
@@ -342,13 +366,83 @@ impl App {
     /// the file-open baseline auto (skipped if nothing changed).
     fn open_store(&mut self) {
         self.store = None;
+        self.note_store = None;
         let Some(path) = self.doc.path() else { return };
-        if let Ok(mut store) = DraftStore::for_document(path) {
+        let path = path.to_path_buf();
+        if let Ok(mut store) = DraftStore::for_document(&path) {
             let now = Self::unix_ms();
             let _ = store.prune(now);
             let _ = store.snapshot(&self.doc.text(), DraftKind::Auto, None, now);
             self.store = Some(store);
         }
+        if let Ok(mut notes) = NoteStore::for_document(&path) {
+            if notes.reanchor(&self.doc.text()) {
+                let _ = notes.save();
+            }
+            self.note_store = Some(notes);
+        }
+    }
+
+    /// The block index (in preview order) that a source byte offset falls in.
+    fn block_of(&self, byte: usize) -> usize {
+        self.preview_offsets
+            .iter()
+            .rposition(|&start| start <= byte)
+            .unwrap_or(0)
+    }
+
+    /// The `[start, end)` source byte span of preview block `i`.
+    fn block_span(&self, i: usize, source: &str) -> (usize, usize) {
+        let start = self.preview_offsets.get(i).copied().unwrap_or(0);
+        let end = self
+            .preview_offsets
+            .get(i + 1)
+            .copied()
+            .unwrap_or(source.len());
+        (start, end)
+    }
+
+    /// The first note anchored to block `block`, as (id, body).
+    fn note_at_block(&self, block: usize) -> Option<(String, String)> {
+        let notes = self.note_store.as_ref()?;
+        notes
+            .notes()
+            .iter()
+            .find(|n| self.block_of(n.start) == block)
+            .map(|n| (n.id.clone(), n.body.clone()))
+    }
+
+    /// Sorted, de-duplicated block indices that carry a note — for [/] jumps.
+    fn noted_blocks(&self) -> Vec<usize> {
+        let mut blocks: Vec<usize> = self
+            .note_store
+            .as_ref()
+            .map(|ns| ns.notes().iter().map(|n| self.block_of(n.start)).collect())
+            .unwrap_or_default();
+        blocks.sort_unstable();
+        blocks.dedup();
+        blocks
+    }
+
+    /// Notes to draw in preview, each resolved to its block. Empty when notes
+    /// are hidden (Cmd+Shift+N) or the document has no note store yet.
+    fn note_marks(&self) -> Vec<preview::NoteMark> {
+        if !self.notes_visible {
+            return Vec::new();
+        }
+        let Some(notes) = &self.note_store else {
+            return Vec::new();
+        };
+        notes
+            .notes()
+            .iter()
+            .map(|n| preview::NoteMark {
+                block: self.block_of(n.start),
+                body: n.body.clone(),
+                resolved: !n.is_open(),
+                detached: n.detached,
+            })
+            .collect()
     }
 
     /// Bookkeeping after any text mutation.
@@ -385,6 +479,13 @@ impl App {
                     let source = self.doc.text();
                     self.preview_offsets =
                         preview::block_offsets(&source, theme::tokens(self.dark));
+                    // Refresh note anchors against the current text before they
+                    // render — preview is where notes are seen.
+                    if let Some(notes) = self.note_store.as_mut() {
+                        if notes.reanchor(&source) {
+                            let _ = notes.save();
+                        }
+                    }
                     let caret_byte = self.doc.buffer().char_to_byte(self.doc.cursor().pos);
                     self.preview_pointer = self
                         .preview_offsets
@@ -412,6 +513,82 @@ impl App {
                         (self.preview_pointer as i32 + delta).clamp(0, last) as usize;
                     return self.preview_snap_task();
                 }
+                Task::none()
+            }
+            Message::NoteOpen => {
+                if self.note_store.is_none() {
+                    self.status = Some("save the file to add notes".to_string());
+                    return Task::none();
+                }
+                if self.preview_offsets.is_empty() {
+                    return Task::none();
+                }
+                // Editing the block's note if it has one, else adding.
+                match self.note_at_block(self.preview_pointer) {
+                    Some((id, body)) => {
+                        self.note_edit_id = Some(id);
+                        self.input = body;
+                    }
+                    None => {
+                        self.note_edit_id = None;
+                        self.input.clear();
+                    }
+                }
+                self.open_overlay(Overlay::Note)
+            }
+            Message::NoteJump(delta) => {
+                let blocks = self.noted_blocks();
+                if blocks.is_empty() {
+                    return Task::none();
+                }
+                let cur = self.preview_pointer;
+                let target = if delta > 0 {
+                    blocks
+                        .iter()
+                        .copied()
+                        .find(|&b| b > cur)
+                        .or_else(|| blocks.first().copied())
+                } else {
+                    blocks
+                        .iter()
+                        .copied()
+                        .rev()
+                        .find(|&b| b < cur)
+                        .or_else(|| blocks.last().copied())
+                };
+                if let Some(block) = target {
+                    self.preview_pointer = block;
+                    return self.preview_snap_task();
+                }
+                Task::none()
+            }
+            Message::NoteResolve => {
+                if let Some((id, _)) = self.note_at_block(self.preview_pointer) {
+                    if let Some(notes) = self.note_store.as_mut() {
+                        let _ = notes.toggle_resolved(&id);
+                    }
+                }
+                Task::none()
+            }
+            Message::NoteDelete => {
+                if let Some((id, _)) = self.note_at_block(self.preview_pointer) {
+                    if let Some(notes) = self.note_store.as_mut() {
+                        let _ = notes.remove(&id);
+                    }
+                    self.status = Some("· note deleted".to_string());
+                }
+                Task::none()
+            }
+            Message::ToggleNotes => {
+                self.notes_visible = !self.notes_visible;
+                self.status = Some(
+                    if self.notes_visible {
+                        "· notes shown"
+                    } else {
+                        "· notes hidden"
+                    }
+                    .to_string(),
+                );
                 Task::none()
             }
             Message::Save => {
@@ -630,7 +807,13 @@ impl App {
                             Some(name),
                             Self::unix_ms(),
                         ) {
-                            Ok(_) => {
+                            Ok(entry) => {
+                                // Freeze the live notes with the marked draft so
+                                // it carries the critique that was live (never
+                                // drifts — the draft's text is frozen).
+                                if let (Some(entry), Some(notes)) = (&entry, &self.note_store) {
+                                    let _ = notes.freeze_to(&entry.id);
+                                }
                                 let task = self.close_overlay();
                                 self.status = Some("· draft marked".to_string());
                                 return task;
@@ -664,6 +847,35 @@ impl App {
                     }
                 }
                 Overlay::Publish => self.start_publish(self.publish_selected),
+                Overlay::Note => {
+                    let body = self.input.trim().to_string();
+                    let edit_id = self.note_edit_id.take();
+                    // Empty body: delete the note being edited, or cancel a new one.
+                    if body.is_empty() {
+                        if let (Some(id), Some(notes)) = (edit_id, self.note_store.as_mut()) {
+                            let _ = notes.remove(&id);
+                        }
+                        return self.close_overlay();
+                    }
+                    let source = self.doc.text();
+                    let (start, end) = self.block_span(self.preview_pointer, &source);
+                    let quote = anchor_quote(source.get(start..end).unwrap_or(""));
+                    if let Some(notes) = self.note_store.as_mut() {
+                        let result = match edit_id {
+                            Some(id) => notes.edit(&id, body),
+                            None => notes
+                                .add(start, end, quote, body, Self::unix_ms())
+                                .map(|_| ()),
+                        };
+                        if let Err(e) = result {
+                            self.status = Some(format!("note failed: {e}"));
+                            return self.close_overlay();
+                        }
+                    }
+                    let task = self.close_overlay();
+                    self.status = Some("· note saved".to_string());
+                    task
+                }
                 Overlay::None => Task::none(),
             },
             Message::OverlayClose => self.close_overlay(),
@@ -1002,6 +1214,9 @@ impl App {
                 let n = self.store.as_ref().map(|s| s.marked_count()).unwrap_or(0);
                 self.input = format!("Draft {}", n + 1);
             }
+            // The note input's text is set by NoteOpen (edit prefill or empty);
+            // leave it and let the focus below land in it.
+            Overlay::Note => {}
             // The publish picker has no text input; Up/Down/Enter/Esc arrive
             // via the overlay subscription, so the focus below is a no-op.
             Overlay::Publish | Overlay::None => {}
@@ -1012,6 +1227,7 @@ impl App {
 
     fn close_overlay(&mut self) -> Task<Message> {
         self.overlay = Overlay::None;
+        self.note_edit_id = None;
         Task::none()
     }
 
@@ -1181,6 +1397,19 @@ impl App {
             ]
             .spacing(12)
             .into(),
+            Overlay::Note => row![
+                quiet_text(
+                    if self.note_edit_id.is_some() {
+                        "edit note"
+                    } else {
+                        "note"
+                    }
+                    .to_string()
+                ),
+                self.chrome_input("a note to yourself (empty deletes)"),
+            ]
+            .spacing(12)
+            .into(),
             Overlay::Publish => {
                 let mut list =
                     column![text("publish to").font(fonts::MONO).size(13).color(t.star)].spacing(6);
@@ -1273,15 +1502,20 @@ impl App {
                 // The scrollable spans the window (scrollbar at the window
                 // edge, clear of the text); the column centers inside it.
                 let source = self.doc.text();
-                let column_content =
-                    container(preview::view(&source, t, Some(self.preview_pointer)))
-                        .max_width(600)
-                        .padding(Padding {
-                            top: 4.0,
-                            right: 2.0,
-                            bottom: 220.0,
-                            left: 2.0,
-                        });
+                let notes = self.note_marks();
+                let column_content = container(preview::view(
+                    &source,
+                    t,
+                    Some(self.preview_pointer),
+                    &notes,
+                ))
+                .max_width(600)
+                .padding(Padding {
+                    top: 4.0,
+                    right: 2.0,
+                    bottom: 220.0,
+                    left: 2.0,
+                });
                 let scroll = scrollable(container(column_content).center_x(Fill))
                     .id(PREVIEW_SCROLL_ID)
                     .width(Fill)
@@ -1471,6 +1705,20 @@ impl App {
     }
 }
 
+/// The anchor quote for a note on a block: its first non-empty source line,
+/// trimmed and capped. A prefix of the block, so it re-anchors by exact match
+/// yet is resilient to edits later in the block. Design: PHASE4.md #7.
+fn anchor_quote(block_src: &str) -> String {
+    block_src
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("")
+        .trim()
+        .chars()
+        .take(120)
+        .collect()
+}
+
 /// "just now" / "5 min ago" / "3 h ago" / "2 days ago".
 fn ago(now_ms: u64, then_ms: u64) -> String {
     let secs = now_ms.saturating_sub(then_ms) / 1000;
@@ -1573,6 +1821,17 @@ fn preview_key_events(
             keyboard::Key::Character("p") if modifiers.command() => Some(Message::TogglePreview),
             keyboard::Key::Character("t") if modifiers.command() => Some(Message::ToggleTheme),
             keyboard::Key::Character("s") if modifiers.command() => Some(Message::Save),
+            // Cmd+Shift+N shows/hides notes (must precede the bare-n note key).
+            keyboard::Key::Character("n" | "N") if modifiers.command() => {
+                Some(Message::ToggleNotes)
+            }
+            // Notes: n adds/edits on the current block, [/] jump between notes,
+            // x resolves, Shift+X deletes.
+            keyboard::Key::Character("n") => Some(Message::NoteOpen),
+            keyboard::Key::Character("[") => Some(Message::NoteJump(-1)),
+            keyboard::Key::Character("]") => Some(Message::NoteJump(1)),
+            keyboard::Key::Character("x") => Some(Message::NoteResolve),
+            keyboard::Key::Character("X") => Some(Message::NoteDelete),
             // Up/Down walk the reading pointer; PageUp/Down still free-scroll.
             keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
                 Some(Message::PreviewPointer(-1))
@@ -1973,6 +2232,69 @@ mod tests {
         let _ = app.update(Message::TogglePreview);
         assert_eq!(app.view_mode, ViewMode::Write);
         assert_eq!(app.doc.cursor().pos, text.find("Gamma").unwrap());
+    }
+
+    #[test]
+    fn notes_add_render_resolve_jump_and_delete_in_preview() {
+        let dir = std::env::temp_dir().join("polaris-gui-notes");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("notes.md");
+        std::fs::write(&path, "# Title\n\nAlpha para.\n\nBeta para.\n").unwrap();
+
+        let (mut app, _) = App::boot(Some(path.clone()), false);
+        assert!(app.note_store.is_some(), "notes open with a saved doc");
+
+        // Preview, pointer to the "Beta para." block: heading(0), Alpha(1), Beta(2).
+        app.doc.set_cursor_pos(0, false);
+        let _ = app.update(Message::TogglePreview);
+        let _ = app.update(Message::PreviewPointer(1));
+        let _ = app.update(Message::PreviewPointer(1));
+        assert_eq!(app.preview_pointer, 2);
+
+        // Add a note on that block.
+        let _ = app.update(Message::NoteOpen);
+        assert_eq!(app.overlay, Overlay::Note);
+        app.input = "check this claim".to_string();
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+        assert_eq!(app.overlay, Overlay::None);
+        let notes = app.note_store.as_ref().unwrap().notes();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].body, "check this claim");
+        assert_eq!(
+            app.block_of(notes[0].start),
+            2,
+            "anchored to the Beta block"
+        );
+
+        // Re-opening on the same block edits (prefilled), Esc clears edit state.
+        let _ = app.update(Message::NoteOpen);
+        assert!(app.note_edit_id.is_some());
+        assert_eq!(app.input, "check this claim");
+        let _ = app.update(Message::OverlayClose);
+        assert!(app.note_edit_id.is_none());
+
+        // Marks render when visible, vanish when hidden.
+        assert_eq!(app.note_marks().len(), 1);
+        let _ = app.update(Message::ToggleNotes);
+        assert!(app.note_marks().is_empty());
+        let _ = app.update(Message::ToggleNotes);
+
+        // Resolve flips the mark; jump from the top lands on the noted block.
+        let _ = app.update(Message::NoteResolve);
+        assert!(app.note_marks()[0].resolved);
+        app.preview_pointer = 0;
+        let _ = app.update(Message::NoteJump(1));
+        assert_eq!(app.preview_pointer, 2);
+
+        // Delete removes it, and the removal persists.
+        let _ = app.update(Message::NoteDelete);
+        assert!(app.note_store.as_ref().unwrap().is_empty());
+        assert!(polaris_drafts::NoteStore::for_document(&path)
+            .unwrap()
+            .is_empty());
+
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

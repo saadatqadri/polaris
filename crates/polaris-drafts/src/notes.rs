@@ -81,9 +81,11 @@ impl NoteStore {
     pub fn for_document(doc_path: &Path) -> io::Result<Self> {
         let root = sidecar_root(doc_path)?;
         let notes = match fs::read_to_string(root.join("notes").join("live.json")) {
-            Ok(s) => serde_json::from_str::<NotesFile>(&s)
-                .unwrap_or_default()
-                .notes,
+            Ok(s) => {
+                serde_json::from_str::<NotesFile>(&s)
+                    .unwrap_or_default()
+                    .notes
+            }
             Err(_) => Vec::new(),
         };
         Ok(Self { root, notes })
@@ -279,7 +281,9 @@ mod tests {
         // Two occurrences of "x"; anchor near the second.
         let src = "x .......... x";
         let second = src.rfind('x').unwrap();
-        store.add(second, second + 1, "x".into(), "n".into(), 0).unwrap();
+        store
+            .add(second, second + 1, "x".into(), "n".into(), 0)
+            .unwrap();
         store.reanchor(src);
         assert_eq!(store.notes()[0].start, second, "keeps the nearer match");
     }
@@ -307,7 +311,10 @@ mod tests {
         store.add(0, 3, "abc".into(), "keep".into(), 0).unwrap();
         store.freeze_to("d-000-aa").unwrap();
 
-        let frozen = doc.parent().unwrap().join(".polaris/doc.md/notes/d-000-aa.json");
+        let frozen = doc
+            .parent()
+            .unwrap()
+            .join(".polaris/doc.md/notes/d-000-aa.json");
         assert!(frozen.exists());
         assert!(fs::read_to_string(frozen).unwrap().contains("keep"));
     }
