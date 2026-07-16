@@ -44,8 +44,10 @@ diffs — R restores, and even that is one Cmd+Z from undone.
 
 ## Publish
 
-**Cmd+D** deploys to Notion (`polaris config --token … --default-page …`
-first). More targets are coming — write once, publish anywhere.
+**Cmd+D** publishes. Configure a target in `~/.polaris.toml` — Notion
+(`polaris config --token … --default-page …`) or Hugo (a `[hugo]` section) —
+and with more than one, Cmd+D offers a quiet picker. Write once, publish
+anywhere.
 
 ---
 

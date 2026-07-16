@@ -71,8 +71,10 @@ enum Overlay {
     SaveAs,
     /// Cmd+R: input prefilled with the current name; Enter renames on disk.
     Rename,
-    /// Cmd+D confirmation: page + mode shown, Enter deploys, Esc cancels.
-    Deploy,
+    /// Cmd+D target picker (shown only with ≥2 targets): Up/Down select,
+    /// Enter publishes, Esc cancels. With one target Cmd+D fires straight
+    /// through without this overlay.
+    Publish,
     /// Cmd+L: session word goal — a number sets it, empty clears it.
     Goal,
     /// Cmd+M: name and mark a draft (docs/DRAFTS.md).
@@ -123,9 +125,13 @@ struct App {
     chrome_alpha: f32,
     last_key_ms: Option<u64>,
     pending_revert: Option<Revert>,
-    deploy_token: Option<String>,
-    deploy_page: Option<String>,
-    deploying: bool,
+    /// The live target list built on Cmd+D (empty when the picker is closed).
+    /// Boxed trait objects — consumed when a publish fires.
+    publish_targets: Vec<Box<dyn polaris_publish::Target>>,
+    publish_selected: usize,
+    publishing: bool,
+    /// A Hugo overwrite was refused; the next Cmd+D to that file forces it.
+    overwrite_armed: bool,
     /// An untitled buffer got one close warning; the next close discards.
     close_pending: bool,
     /// Phase 2 writing modes (session flags for now).
@@ -160,8 +166,11 @@ enum Message {
     FadeTick,
     TogglePreview,
     ToggleTheme,
-    DeployOpen,
-    DeployDone(Result<String, String>),
+    PublishOpen,
+    /// Move the target-picker selection (only meaningful while the Publish
+    /// overlay is open).
+    PublishNav(i32),
+    PublishDone(Result<polaris_publish::Outcome, String>),
     FindOpen,
     RenameOpen,
     OverlayInput(String),
@@ -218,9 +227,10 @@ impl App {
             chrome_alpha: 1.0,
             last_key_ms: None,
             pending_revert: None,
-            deploy_token: None,
-            deploy_page: None,
-            deploying: false,
+            publish_targets: Vec::new(),
+            publish_selected: 0,
+            publishing: false,
+            overwrite_armed: false,
             close_pending: false,
             typewriter: false,
             focus_dim: false,
@@ -414,44 +424,83 @@ impl App {
                 }
                 Task::none()
             }
-            Message::DeployOpen => {
-                if self.deploying {
+            Message::PublishOpen => {
+                if self.publishing {
                     return Task::none();
                 }
                 if self.doc.path().is_none() {
-                    self.status = Some("save before deploying (Cmd+S)".to_string());
+                    self.status = Some("save before publishing (Cmd+S)".to_string());
                     return Task::none();
                 }
-                match crate::config::Config::load() {
-                    Ok(config) => match (config.notion.token, config.notion.default_page) {
-                        (Some(token), Some(page)) => {
-                            self.deploy_token = Some(token);
-                            self.deploy_page = Some(page);
-                            self.open_overlay(Overlay::Deploy)
-                        }
-                        _ => {
-                            self.status = Some(
-                                "notion not configured — polaris config --token … --default-page …"
-                                    .to_string(),
-                            );
-                            Task::none()
-                        }
-                    },
+                let config = match crate::config::Config::load() {
+                    Ok(c) => c,
                     Err(e) => {
                         self.status = Some(format!("config error: {e}"));
+                        return Task::none();
+                    }
+                };
+                self.publish_targets = crate::publish::available(&config, self.overwrite_armed);
+                match self.publish_targets.len() {
+                    0 => {
+                        self.status = Some(
+                            "no publish targets — configure Notion or add [hugo] (docs/PHASE4.md)"
+                                .to_string(),
+                        );
                         Task::none()
+                    }
+                    // One target: one keystroke stays one keystroke.
+                    1 => self.start_publish(0),
+                    _ => {
+                        self.publish_selected =
+                            crate::publish::default_id(&config, &self.publish_targets)
+                                .and_then(|id| {
+                                    self.publish_targets.iter().position(|t| t.id() == id)
+                                })
+                                .unwrap_or(0);
+                        self.open_overlay(Overlay::Publish)
                     }
                 }
             }
-            Message::DeployDone(result) => {
-                self.deploying = false;
+            Message::PublishNav(delta) => {
+                if self.overlay == Overlay::Publish && !self.publish_targets.is_empty() {
+                    let last = self.publish_targets.len() as i32 - 1;
+                    let next = (self.publish_selected as i32 + delta).clamp(0, last);
+                    self.publish_selected = next as usize;
+                }
+                Task::none()
+            }
+            Message::PublishDone(result) => {
+                self.publishing = false;
                 self.status = Some(match result {
-                    Ok(url) => format!(
-                        "✓ deployed {} → {}",
-                        chrono::Local::now().format("%H:%M"),
-                        url
-                    ),
-                    Err(e) => format!("deploy failed: {e}"),
+                    Ok(polaris_publish::Outcome::Url(url)) => {
+                        self.overwrite_armed = false;
+                        format!(
+                            "✓ published {} → {}",
+                            chrono::Local::now().format("%H:%M"),
+                            url
+                        )
+                    }
+                    Ok(polaris_publish::Outcome::Path(path)) => {
+                        self.overwrite_armed = false;
+                        let name = path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| path.display().to_string());
+                        format!("✓ wrote {} {}", chrono::Local::now().format("%H:%M"), name)
+                    }
+                    Ok(polaris_publish::Outcome::Clipboard { hint, .. }) => {
+                        self.overwrite_armed = false;
+                        format!("✓ copied — {hint}")
+                    }
+                    // Hugo's overwrite guard: arm a forced retry on the next Cmd+D.
+                    Err(e) if e.contains("already exists") => {
+                        self.overwrite_armed = true;
+                        "file exists — Cmd+D again to overwrite".to_string()
+                    }
+                    Err(e) => {
+                        self.overwrite_armed = false;
+                        format!("publish failed: {e}")
+                    }
                 });
                 Task::none()
             }
@@ -590,30 +639,7 @@ impl App {
                         }
                     }
                 }
-                Overlay::Deploy => {
-                    self.save_now();
-                    let (Some(token), Some(page)) =
-                        (self.deploy_token.clone(), self.deploy_page.clone())
-                    else {
-                        return self.close_overlay();
-                    };
-                    let markdown = self.doc.text();
-                    self.deploying = true;
-                    self.status = Some("deploying…".to_string());
-                    let close = self.close_overlay();
-                    Task::batch([
-                        close,
-                        Task::perform(
-                            async move {
-                                polaris_notion::NotionClient::new(token)
-                                    .deploy(&markdown, &page, polaris_notion::PublishMode::Append)
-                                    .await
-                                    .map_err(|e| e.to_string())
-                            },
-                            Message::DeployDone,
-                        ),
-                    ])
-                }
+                Overlay::Publish => self.start_publish(self.publish_selected),
                 Overlay::None => Task::none(),
             },
             Message::OverlayClose => self.close_overlay(),
@@ -879,7 +905,7 @@ impl App {
             "r" => self.update(Message::RenameOpen),
             "p" => self.update(Message::TogglePreview),
             "t" => self.update(Message::ToggleTheme),
-            "d" => self.update(Message::DeployOpen),
+            "d" => self.update(Message::PublishOpen),
             "y" => {
                 self.typewriter = !self.typewriter;
                 Task::none()
@@ -952,9 +978,9 @@ impl App {
                 let n = self.store.as_ref().map(|s| s.marked_count()).unwrap_or(0);
                 self.input = format!("Draft {}", n + 1);
             }
-            // Deploy has no input; Enter/Esc arrive via the overlay
-            // subscription, so the missing-id focus below is a no-op.
-            Overlay::Deploy | Overlay::None => {}
+            // The publish picker has no text input; Up/Down/Enter/Esc arrive
+            // via the overlay subscription, so the focus below is a no-op.
+            Overlay::Publish | Overlay::None => {}
         }
         self.chrome_alpha = 1.0;
         iced::widget::operation::focus(CHROME_INPUT_ID)
@@ -963,6 +989,34 @@ impl App {
     fn close_overlay(&mut self) -> Task<Message> {
         self.overlay = Overlay::None;
         Task::none()
+    }
+
+    /// Save, then publish the target at `index` in `publish_targets`,
+    /// consuming the built list. Reached by Cmd+D fire-through (one target)
+    /// or the picker's Enter.
+    fn start_publish(&mut self, index: usize) -> Task<Message> {
+        let targets = std::mem::take(&mut self.publish_targets);
+        let Some(target) = targets.into_iter().nth(index) else {
+            return self.close_overlay();
+        };
+        self.save_now();
+        let markdown = self.doc.text();
+        let path = self.doc.path().map(|p| p.to_path_buf());
+        self.publishing = true;
+        self.status = Some(format!("publishing to {}…", target.label()));
+        let close = self.close_overlay();
+        Task::batch([
+            close,
+            Task::perform(
+                async move {
+                    target
+                        .publish(polaris_publish::Doc::new(&markdown, path.as_deref()))
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                Message::PublishDone,
+            ),
+        ])
     }
 
     fn refresh_matches(&mut self) {
@@ -1087,19 +1141,25 @@ impl App {
             ]
             .spacing(12)
             .into(),
-            Overlay::Deploy => {
-                let page = self.deploy_page.as_deref().unwrap_or("?");
-                let short: String = page.chars().take(8).collect();
-                row![
-                    text("deploy to notion")
-                        .font(fonts::MONO)
-                        .size(13)
-                        .color(t.star),
-                    quiet_text(format!("append → {short}…")),
-                    space().width(Fill),
-                    quiet_text("Enter confirm · Esc cancel".to_string()),
-                ]
-                .spacing(12)
+            Overlay::Publish => {
+                let mut list =
+                    column![text("publish to").font(fonts::MONO).size(13).color(t.star)].spacing(6);
+                for (i, target) in self.publish_targets.iter().enumerate() {
+                    let label = target.label();
+                    if i == self.publish_selected {
+                        list = list.push(
+                            text(format!("✧ {label}"))
+                                .font(fonts::MONO)
+                                .size(13)
+                                .color(t.star),
+                        );
+                    } else {
+                        list = list.push(quiet_text(format!("   {label}")));
+                    }
+                }
+                list.push(quiet_text(
+                    "↑↓ select · Enter publish · Esc cancel".to_string(),
+                ))
                 .into()
             }
         };
@@ -1450,6 +1510,9 @@ fn overlay_key_events(
             keyboard::Key::Named(keyboard::key::Named::Enter) => Some(Message::OverlaySubmit {
                 backwards: modifiers.shift(),
             }),
+            // Only the publish picker acts on these; other overlays ignore them.
+            keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Some(Message::PublishNav(-1)),
+            keyboard::Key::Named(keyboard::key::Named::ArrowDown) => Some(Message::PublishNav(1)),
             _ => None,
         }
     } else {
@@ -1962,48 +2025,84 @@ mod tests {
     }
 
     #[test]
-    fn deploy_requires_a_saved_file() {
+    fn publish_requires_a_saved_file() {
         let (mut app, _) = App::boot(None, false);
-        let _ = app.update(Message::DeployOpen);
+        let _ = app.update(Message::PublishOpen);
         assert_eq!(app.overlay, Overlay::None);
         assert!(app.status.as_deref().unwrap_or("").contains("save"));
     }
 
+    fn fake_targets(n: usize, dir: &std::path::Path) -> Vec<Box<dyn polaris_publish::Target>> {
+        (0..n)
+            .map(|_| {
+                Box::new(polaris_publish::HugoTarget::new(
+                    dir.to_path_buf(),
+                    toml::Table::new(),
+                )) as Box<dyn polaris_publish::Target>
+            })
+            .collect()
+    }
+
     #[test]
-    fn deploy_confirm_saves_and_starts_exactly_one_deploy() {
-        let dir = std::env::temp_dir().join("polaris-gui-test");
+    fn publish_confirm_saves_and_starts_exactly_one_publish() {
+        let dir = std::env::temp_dir().join("polaris-gui-publish");
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("deploy.md");
+        let path = dir.join("publish.md");
         std::fs::write(&path, "content\n").unwrap();
 
         let (mut app, _) = App::boot(Some(path.clone()), false);
         type_into(&mut app, "更 ");
-        // Simulate a configured deploy confirmation (bypasses Config::load).
-        app.deploy_token = Some("secret".into());
-        app.deploy_page = Some("abc123def456".into());
-        app.overlay = Overlay::Deploy;
+        // Seed the picker directly (bypasses Config::load); two targets means
+        // the overlay path, not fire-through, is exercised.
+        app.publish_targets = fake_targets(2, &dir);
+        app.publish_selected = 0;
+        app.overlay = Overlay::Publish;
 
         let _ = app.update(Message::OverlaySubmit { backwards: false });
-        assert!(app.deploying);
+        assert!(app.publishing);
         assert_eq!(app.overlay, Overlay::None);
-        assert!(!app.doc.is_dirty(), "saved before deploying");
-        assert!(app.status.as_deref().unwrap_or("").contains("deploying"));
+        assert!(!app.doc.is_dirty(), "saved before publishing");
+        assert!(app.status.as_deref().unwrap_or("").contains("publishing"));
+        assert!(app.publish_targets.is_empty(), "target list consumed");
 
         // Re-triggering while in flight is a no-op.
-        let _ = app.update(Message::DeployOpen);
+        let _ = app.update(Message::PublishOpen);
         assert_eq!(app.overlay, Overlay::None);
 
-        let _ = app.update(Message::DeployDone(Ok("https://notion.so/x".into())));
-        assert!(!app.deploying);
-        assert!(app.status.as_deref().unwrap_or("").contains("deployed"));
+        let _ = app.update(Message::PublishDone(Ok(polaris_publish::Outcome::Url(
+            "https://notion.so/x".into(),
+        ))));
+        assert!(!app.publishing);
+        assert!(app.status.as_deref().unwrap_or("").contains("published"));
 
-        let _ = app.update(Message::DeployDone(Err("401".into())));
+        // Hugo's overwrite guard arms a forced retry; a generic error clears it.
+        let _ = app.update(Message::PublishDone(Err("x already exists y".into())));
+        assert!(app.overwrite_armed);
+        assert!(app.status.as_deref().unwrap_or("").contains("overwrite"));
+        let _ = app.update(Message::PublishDone(Err("401".into())));
+        assert!(!app.overwrite_armed);
         assert!(app
             .status
             .as_deref()
             .unwrap_or("")
-            .contains("deploy failed"));
+            .contains("publish failed"));
+
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn publish_picker_nav_clamps_within_the_list() {
+        let (mut app, _) = App::boot(None, false);
+        app.publish_targets = fake_targets(2, &std::env::temp_dir());
+        app.overlay = Overlay::Publish;
+        app.publish_selected = 0;
+
+        let _ = app.update(Message::PublishNav(-1));
+        assert_eq!(app.publish_selected, 0, "clamps at the top");
+        let _ = app.update(Message::PublishNav(1));
+        assert_eq!(app.publish_selected, 1);
+        let _ = app.update(Message::PublishNav(1));
+        assert_eq!(app.publish_selected, 1, "clamps at the bottom");
     }
 
     #[test]
