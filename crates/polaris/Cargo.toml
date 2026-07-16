@@ -11,6 +11,7 @@ repository.workspace = true
 polaris-core = { path = "../polaris-core" }
 polaris-drafts = { path = "../polaris-drafts" }
 polaris-notion = { path = "../polaris-notion" }
+polaris-publish = { path = "../polaris-publish" }
 
 anyhow.workspace = true
 serde.workspace = true

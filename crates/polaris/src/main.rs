@@ -1,12 +1,14 @@
 mod cli;
 mod config;
 mod gui;
+mod publish;
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
 use polaris_notion::{NotionClient, PublishMode};
+use polaris_publish::{Doc, Outcome};
 use std::fs;
 use std::path::PathBuf;
 
@@ -47,6 +49,8 @@ fn main() -> Result<()> {
 async fn run_command(command: Commands) -> Result<()> {
     match command {
         Commands::Deploy { file, page, mode } => deploy_file(file, page, &mode).await,
+
+        Commands::Publish { file, to, force } => publish_file(file, to, force).await,
 
         Commands::Config {
             token,
@@ -102,6 +106,50 @@ async fn deploy_file(file: PathBuf, page_id: Option<String>, mode_str: &str) -> 
     println!("  Time: {}", timestamp);
     println!("  Mode: {}", mode_str);
     println!("  URL: {}", url);
+
+    Ok(())
+}
+
+async fn publish_file(file: PathBuf, to: Option<String>, force: bool) -> Result<()> {
+    let config = Config::load()?;
+    let targets = publish::available(&config, force);
+
+    if targets.is_empty() {
+        anyhow::bail!(
+            "No publish targets configured. Add a [hugo] section or Notion \
+             credentials to ~/.polaris.toml (see docs/PHASE4.md)."
+        );
+    }
+
+    let want = to
+        .or_else(|| publish::default_id(&config, &targets))
+        .context("Specify a target with --to")?;
+
+    let target = targets.iter().find(|t| t.id() == want).ok_or_else(|| {
+        let available: Vec<_> = targets.iter().map(|t| t.id()).collect();
+        anyhow::anyhow!(
+            "Unknown target '{want}'. Configured: {}",
+            available.join(", ")
+        )
+    })?;
+
+    let markdown =
+        fs::read_to_string(&file).with_context(|| format!("Failed to read file: {:?}", file))?;
+
+    println!("Publishing to {}…", target.label());
+    let outcome = target
+        .publish(Doc::new(&markdown, Some(&file)))
+        .await
+        .with_context(|| format!("Publish to {} failed", target.id()))?;
+
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+    println!("\n✓ Published to {}", target.label());
+    println!("  Time: {timestamp}");
+    match outcome {
+        Outcome::Url(url) => println!("  URL:  {url}"),
+        Outcome::Path(path) => println!("  File: {}", path.display()),
+        Outcome::Clipboard { hint, .. } => println!("  {hint} (copied to clipboard)"),
+    }
 
     Ok(())
 }

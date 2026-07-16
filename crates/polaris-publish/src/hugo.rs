@@ -58,7 +58,8 @@ impl Target for HugoTarget {
         }
 
         let front = front_matter(&title, &Local::now(), &self.front_matter_defaults);
-        let contents = format!("{front}\n{}", doc.markdown);
+        let body = strip_leading_title(doc.markdown, &title);
+        let contents = format!("{front}\n{body}");
 
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
@@ -94,6 +95,40 @@ pub fn slug(title: &str) -> String {
     }
 }
 
+/// Drop the body's opening `# title` when it is the very heading we lifted
+/// into front matter — Hugo renders the title from front matter, so keeping
+/// it duplicates the heading on the page. Only a *leading* H1 (the first
+/// non-blank line) is removed; an H1 deeper in the document is left alone,
+/// and a title taken from the filename never matches, so nothing is dropped.
+fn strip_leading_title(markdown: &str, title: &str) -> String {
+    let mut lines = markdown.lines().peekable();
+
+    // Skip any leading blank lines to reach the first real line.
+    while lines.peek().is_some_and(|l| l.trim().is_empty()) {
+        lines.next();
+    }
+
+    let is_our_title = lines
+        .peek()
+        .and_then(|l| l.trim_start().strip_prefix("# "))
+        .map(str::trim)
+        == Some(title);
+    if !is_our_title {
+        return markdown.to_string();
+    }
+
+    lines.next(); // the H1 itself
+    if lines.peek().is_some_and(|l| l.trim().is_empty()) {
+        lines.next(); // one blank line after the title
+    }
+    let rest: Vec<&str> = lines.collect();
+    if rest.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", rest.join("\n"))
+    }
+}
+
 /// TOML front matter fenced with `+++`. `title` and `date` are generated;
 /// `defaults` fills in anything else (draft flag, author) but never
 /// overrides the generated keys.
@@ -118,7 +153,10 @@ mod tests {
     #[test]
     fn slugs_lowercase_and_hyphenate() {
         assert_eq!(slug("The Post Title"), "the-post-title");
-        assert_eq!(slug("Write Once, Publish Anywhere!"), "write-once-publish-anywhere");
+        assert_eq!(
+            slug("Write Once, Publish Anywhere!"),
+            "write-once-publish-anywhere"
+        );
         assert_eq!(slug("  spaced  out  "), "spaced-out");
         assert_eq!(slug("café résumé"), "café-résumé");
         assert_eq!(slug("---"), "untitled");
@@ -144,7 +182,10 @@ mod tests {
         let mut defaults = toml::Table::new();
         defaults.insert("draft".to_string(), toml::Value::Boolean(true));
         // A stray "title" default must NOT clobber the real title.
-        defaults.insert("title".to_string(), toml::Value::String("WRONG".to_string()));
+        defaults.insert(
+            "title".to_string(),
+            toml::Value::String("WRONG".to_string()),
+        );
         let fm = front_matter("Right", &Local::now(), &defaults);
         assert!(fm.contains("draft = true"));
         assert!(fm.contains("title = \"Right\""));
@@ -167,6 +208,27 @@ mod tests {
         assert!(written.starts_with("+++\n"));
         assert!(written.contains("title = \"My First Post\""));
         assert!(written.contains("Hello, world."));
+        // The title H1 belongs to front matter, not the body — no duplicate.
+        assert!(!written.contains("# My First Post"));
+    }
+
+    #[test]
+    fn strip_leading_title_only_touches_the_matching_leading_h1() {
+        // Leading title (with a blank line before it) is removed.
+        assert_eq!(
+            strip_leading_title("\n# Title\n\nbody\n", "Title"),
+            "body\n"
+        );
+        // A non-matching heading stays.
+        assert_eq!(
+            strip_leading_title("# Other\n\nbody\n", "Title"),
+            "# Other\n\nbody\n"
+        );
+        // An H1 that isn't the leading line stays (title came from elsewhere).
+        assert_eq!(
+            strip_leading_title("intro\n\n# Title\n", "Title"),
+            "intro\n\n# Title\n"
+        );
     }
 
     #[tokio::test]

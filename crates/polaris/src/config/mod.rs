@@ -8,6 +8,15 @@ pub struct Config {
     #[serde(default)]
     pub notion: NotionConfig,
 
+    /// Hugo publish target (docs/PHASE4.md). Absent = not offered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hugo: Option<HugoConfig>,
+
+    /// Which target Cmd+D / `polaris publish` picks by default when more
+    /// than one is configured. Absent = the picker's first entry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_target: Option<String>,
+
     /// "light" | "dark" — written by the in-app Cmd+T toggle. Absent =
     /// follow the OS (delete the key to go back to following the OS).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -22,6 +31,18 @@ pub struct Config {
 pub struct NotionConfig {
     pub token: Option<String>,
     pub default_page: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct HugoConfig {
+    /// The site's content directory; `~` is expanded. Polaris writes
+    /// `<content_dir>/<slug>.md` and stops there — the user commits.
+    pub content_dir: String,
+
+    /// Front-matter keys merged under the generated title/date, e.g.
+    /// `front_matter = { draft = true, author = "…" }`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub front_matter: Option<toml::Table>,
 }
 
 impl Config {

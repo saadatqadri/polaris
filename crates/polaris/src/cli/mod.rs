@@ -43,6 +43,20 @@ pub enum Commands {
         mode: String,
     },
 
+    /// Publish a markdown file to a configured target (notion, hugo, …)
+    Publish {
+        /// File to publish
+        file: PathBuf,
+
+        /// Target id (defaults to `default_target`, or the only configured one)
+        #[arg(short, long)]
+        to: Option<String>,
+
+        /// Overwrite an existing file (Hugo)
+        #[arg(short, long)]
+        force: bool,
+    },
+
     /// Configure Notion integration
     Config {
         /// Set Notion API token

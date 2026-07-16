@@ -3084,6 +3084,7 @@ dependencies = [
  "polaris-core",
  "polaris-drafts",
  "polaris-notion",
+ "polaris-publish",
  "pulldown-cmark",
  "serde",
  "tokio",
