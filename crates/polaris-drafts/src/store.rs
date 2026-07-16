@@ -43,7 +43,7 @@ pub struct DraftStore {
     manifest: Manifest,
 }
 
-fn sidecar_root(doc_path: &Path) -> io::Result<PathBuf> {
+pub(crate) fn sidecar_root(doc_path: &Path) -> io::Result<PathBuf> {
     // Bare relative names ("draft.md") have an empty parent — anchor to the
     // working directory so the sidecar still lands next to the file.
     let doc_path = std::path::absolute(doc_path)?;

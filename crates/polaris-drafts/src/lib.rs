@@ -6,7 +6,9 @@
 //! testable.
 
 pub mod diff;
+pub mod notes;
 pub mod store;
 
 pub use diff::{word_diff, DiffKind, DiffSpan};
+pub use notes::{Note, NoteState, NoteStore};
 pub use store::{DraftStore, Entry, Kind, AUTO_INTERVAL_MS};
