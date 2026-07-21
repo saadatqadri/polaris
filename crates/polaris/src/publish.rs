@@ -3,12 +3,26 @@
 //! binary's config schema meets them. Design: docs/PHASE4.md.
 
 use crate::config::Config;
-use polaris_publish::{HugoTarget, NotionTarget, Target};
+use crate::gui::fonts;
+use polaris_publish::{
+    Fonts, HtmlTarget, HugoTarget, LinkedinTarget, NotionTarget, SubstackTarget, Target,
+};
 use std::path::PathBuf;
 
-/// Every target the config makes available, in a stable order (Notion,
-/// then Hugo). `hugo_force` overwrites an existing Hugo file; it is inert
-/// for other targets.
+/// The bundled faces, borrowed from the binary's embedded byte constants —
+/// `'static`, so an `HtmlTarget` built from them is a `'static` trait object.
+fn bundled_fonts() -> Fonts<'static> {
+    Fonts {
+        newsreader_regular: fonts::WRITING_REGULAR_BYTES,
+        newsreader_italic: fonts::WRITING_ITALIC_BYTES,
+        newsreader_semibold: fonts::WRITING_SEMIBOLD_BYTES,
+        mono_regular: fonts::MONO_REGULAR_BYTES,
+    }
+}
+
+/// Every target the config makes available, in a stable order (Notion, Hugo,
+/// HTML, Substack, LinkedIn). `hugo_force` overwrites an existing Hugo file;
+/// it is inert for other targets.
 pub fn available(config: &Config, hugo_force: bool) -> Vec<Box<dyn Target>> {
     let mut targets: Vec<Box<dyn Target>> = Vec::new();
 
@@ -24,6 +38,19 @@ pub fn available(config: &Config, hugo_force: bool) -> Vec<Box<dyn Target>> {
         ));
     }
 
+    if let Some(html) = &config.html {
+        let dir = expand_tilde(&html.out_dir);
+        targets.push(Box::new(HtmlTarget::new(dir, bundled_fonts())));
+    }
+
+    if config.substack.is_some() {
+        targets.push(Box::new(SubstackTarget));
+    }
+
+    if config.linkedin.is_some() {
+        targets.push(Box::new(LinkedinTarget));
+    }
+
     targets
 }
 
@@ -37,6 +64,18 @@ pub fn default_id(config: &Config, targets: &[Box<dyn Target>]) -> Option<String
         }
     }
     targets.first().map(|t| t.id().to_string())
+}
+
+/// Place a clipboard target's rendered content on the system clipboard: the
+/// rich `html` flavour when present (so it pastes formatted, e.g. Substack),
+/// else plain `text`. The `text` is always the alt/fallback.
+pub fn copy_to_clipboard(html: Option<&str>, text: &str) -> anyhow::Result<()> {
+    let mut clipboard = arboard::Clipboard::new()?;
+    match html {
+        Some(html) => clipboard.set_html(html, Some(text))?,
+        None => clipboard.set_text(text.to_string())?,
+    }
+    Ok(())
 }
 
 fn expand_tilde(path: &str) -> PathBuf {
@@ -68,8 +107,7 @@ mod tests {
                 front_matter: None,
             }),
             default_target: default_target.map(String::from),
-            theme: None,
-            onboarded: true,
+            ..Config::default()
         }
     }
 
@@ -81,6 +119,25 @@ mod tests {
             .map(|t| t.id())
             .collect();
         assert_eq!(ids, vec!["notion", "hugo"]);
+    }
+
+    #[test]
+    fn clipboard_and_html_targets_are_offered_in_order() {
+        use crate::config::{HtmlConfig, LinkedinConfig, SubstackConfig};
+        let config = Config {
+            hugo: Some(HugoConfig {
+                content_dir: "~/site".into(),
+                front_matter: None,
+            }),
+            html: Some(HtmlConfig {
+                out_dir: "~/exports".into(),
+            }),
+            substack: Some(SubstackConfig {}),
+            linkedin: Some(LinkedinConfig {}),
+            ..Config::default()
+        };
+        let ids: Vec<_> = available(&config, false).iter().map(|t| t.id()).collect();
+        assert_eq!(ids, vec!["hugo", "html", "substack", "linkedin"]);
     }
 
     #[test]

@@ -8,11 +8,17 @@
 //! adding one adapter module here (see `notion.rs`, `hugo.rs`); the binary's
 //! registry turns config into a live target list. Design: `docs/PHASE4.md`.
 
+mod html;
 mod hugo;
+mod linkedin;
 mod notion;
+mod substack;
 
+pub use html::{body_html, standalone_html, Fonts, HtmlTarget};
 pub use hugo::HugoTarget;
+pub use linkedin::{to_linkedin, LinkedinTarget};
 pub use notion::NotionTarget;
+pub use substack::SubstackTarget;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -59,11 +65,17 @@ pub enum Outcome {
     Url(String),
     /// A file written to disk — a file target (Hugo, later HTML/PDF).
     Path(PathBuf),
-    /// The user finishes the last step by hand: `body` is ready for the
-    /// clipboard (the *app* places it there — this crate links no clipboard
-    /// backend), and `hint` says what to do with it. Used by API-less
-    /// targets (Substack paste, LinkedIn) in a later phase.
-    Clipboard { hint: String, body: String },
+    /// The user finishes the last step by hand: the rendered content is ready
+    /// for the clipboard (the *app* places it there — this crate links no
+    /// clipboard backend), and `hint` says what to do with it. `html` is the
+    /// rich flavour for editors that accept a formatted paste (Substack);
+    /// `text` is the always-present plain fallback (and LinkedIn's only form).
+    /// Used by API-less targets.
+    Clipboard {
+        hint: String,
+        html: Option<String>,
+        text: String,
+    },
 }
 
 /// A publish destination. One implementation per platform; the binary builds

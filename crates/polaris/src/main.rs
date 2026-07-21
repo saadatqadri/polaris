@@ -148,7 +148,10 @@ async fn publish_file(file: PathBuf, to: Option<String>, force: bool) -> Result<
     match outcome {
         Outcome::Url(url) => println!("  URL:  {url}"),
         Outcome::Path(path) => println!("  File: {}", path.display()),
-        Outcome::Clipboard { hint, .. } => println!("  {hint} (copied to clipboard)"),
+        Outcome::Clipboard { hint, html, text } => {
+            publish::copy_to_clipboard(html.as_deref(), &text)?;
+            println!("  Copied to clipboard — {hint}");
+        }
     }
 
     Ok(())

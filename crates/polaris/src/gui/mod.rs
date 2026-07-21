@@ -7,7 +7,7 @@
 //! (Cmd+Y) and focus dimming (Cmd+G) are widget flags.
 
 mod editor;
-mod fonts;
+pub(crate) mod fonts;
 mod preview;
 mod theme;
 mod welcome;
@@ -689,9 +689,12 @@ impl App {
                             .unwrap_or_else(|| path.display().to_string());
                         format!("✓ wrote {} {}", chrono::Local::now().format("%H:%M"), name)
                     }
-                    Ok(polaris_publish::Outcome::Clipboard { hint, .. }) => {
+                    Ok(polaris_publish::Outcome::Clipboard { hint, html, text }) => {
                         self.overwrite_armed = false;
-                        format!("✓ copied — {hint}")
+                        match crate::publish::copy_to_clipboard(html.as_deref(), &text) {
+                            Ok(()) => format!("✓ copied — {hint}"),
+                            Err(e) => format!("clipboard failed: {e}"),
+                        }
                     }
                     // Hugo's overwrite guard: arm a forced retry on the next Cmd+D.
                     Err(e) if e.contains("already exists") => {

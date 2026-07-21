@@ -12,6 +12,18 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hugo: Option<HugoConfig>,
 
+    /// HTML export target. Absent = not offered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub html: Option<HtmlConfig>,
+
+    /// Substack format-and-paste. An (even empty) `[substack]` table offers it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub substack: Option<SubstackConfig>,
+
+    /// LinkedIn format-and-copy. An (even empty) `[linkedin]` table offers it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub linkedin: Option<LinkedinConfig>,
+
     /// Which target Cmd+D / `polaris publish` picks by default when more
     /// than one is configured. Absent = the picker's first entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -44,6 +56,20 @@ pub struct HugoConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub front_matter: Option<toml::Table>,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct HtmlConfig {
+    /// Directory the `<slug>.html` export is written into; `~` is expanded.
+    pub out_dir: String,
+}
+
+/// Presence-only markers: an empty `[substack]` / `[linkedin]` table is
+/// enough to offer the target (they need no credentials).
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct SubstackConfig {}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct LinkedinConfig {}
 
 impl Config {
     pub fn load() -> Result<Self> {

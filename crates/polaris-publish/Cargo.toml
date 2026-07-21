@@ -13,6 +13,8 @@ anyhow.workspace = true
 async-trait = "0.1"
 toml = "0.8"
 chrono = "0.4"
+pulldown-cmark = "0.11"
+base64 = "0.22"
 
 [dev-dependencies]
 tokio = { version = "1.35", features = ["macros", "rt"] }
