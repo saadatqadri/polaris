@@ -22,12 +22,15 @@ use iced::{
 };
 
 use polaris_core::{typography, AutosaveTimer, Document};
-use polaris_drafts::{word_diff, DiffKind, DraftStore, Kind as DraftKind, NoteStore};
+use polaris_drafts::{
+    word_diff, Decision, DiffKind, DraftStore, Kind as DraftKind, NoteStore, Review, Segment,
+};
 
 const CHROME_INPUT_ID: &str = "chrome-input";
 const PREVIEW_SCROLL_ID: &str = "preview-scroll";
 const DRAFT_VIEW_SCROLL_ID: &str = "draft-view-scroll";
 const DRAFTS_LIST_SCROLL_ID: &str = "drafts-list-scroll";
+const REVIEW_SCROLL_ID: &str = "review-scroll";
 
 /// DESIGN.md chrome fade: 0.6s out on keystroke, back 1.2s after rest.
 const FADE_OUT_SECS: f32 = 0.6;
@@ -81,6 +84,8 @@ enum Overlay {
     Mark,
     /// N in preview: write (or edit) an inline note on the current block.
     Note,
+    /// Cmd+Shift+I: path of an edited copy to import for accept/reject review.
+    Import,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +96,8 @@ enum ViewMode {
     Drafts,
     /// Viewing one draft with a word-level diff against current.
     DraftView,
+    /// Accept/reject review of an imported edited copy (docs/PHASE4.md P3).
+    Review,
 }
 
 /// A session word goal: progress counts words written since it was set.
@@ -134,6 +141,10 @@ struct App {
     note_store: Option<NoteStore>,
     notes_visible: bool,
     note_edit_id: Option<String>,
+    /// The active accept/reject review (Some only in ViewMode::Review) and the
+    /// change the cursor is on.
+    review: Option<Review>,
+    review_index: usize,
     /// Chrome opacity: fades toward 0 while typing, back to 1 at rest.
     chrome_alpha: f32,
     last_key_ms: Option<u64>,
@@ -210,6 +221,20 @@ enum Message {
     DraftsFlip,
     DraftsRestore,
     DraftsBack,
+    /// Cmd+Shift+I: open the import-path overlay.
+    ImportOpen,
+    /// Accept/reject review: move between changes (±1).
+    ReviewNav(i32),
+    /// Decide the current change: accept, reject, or clear back to pending.
+    ReviewAccept,
+    ReviewReject,
+    ReviewUndo,
+    /// Decide every change at once.
+    ReviewAcceptAll,
+    ReviewRejectAll,
+    /// Apply decisions to the buffer (one undo group) / abandon the review.
+    ReviewApply,
+    ReviewCancel,
     /// Keyboard scrolling for read-only views: (scrollable id, signed px).
     ScrollBy(&'static str, f32),
     /// Snap a read-only view to a relative position (0.0 top, 1.0 bottom).
@@ -255,6 +280,8 @@ impl App {
             note_store: None,
             notes_visible: true,
             note_edit_id: None,
+            review: None,
+            review_index: 0,
             chrome_alpha: 1.0,
             last_key_ms: None,
             pending_revert: None,
@@ -312,6 +339,9 @@ impl App {
         }
         if self.view_mode == ViewMode::DraftView {
             subs.push(event::listen_with(draft_view_key_events));
+        }
+        if self.view_mode == ViewMode::Review {
+            subs.push(event::listen_with(review_key_events));
         }
         subs.push(iced::window::close_requests().map(Message::CloseRequested));
         // Fade animation ticks: while not at the target or typing recently.
@@ -503,8 +533,8 @@ impl App {
                     self.view_mode = ViewMode::Write;
                     Task::none()
                 }
-                // Preview toggle is inert in the drafts views.
-                ViewMode::Drafts | ViewMode::DraftView => Task::none(),
+                // Preview toggle is inert in the drafts and review views.
+                ViewMode::Drafts | ViewMode::DraftView | ViewMode::Review => Task::none(),
             },
             Message::PreviewPointer(delta) => {
                 if self.view_mode == ViewMode::Preview && !self.preview_offsets.is_empty() {
@@ -879,6 +909,34 @@ impl App {
                     self.status = Some("· note saved".to_string());
                     task
                 }
+                Overlay::Import => {
+                    let raw = self.input.trim();
+                    if raw.is_empty() {
+                        return self.close_overlay();
+                    }
+                    let path = expand_tilde_path(raw);
+                    match std::fs::read_to_string(&path) {
+                        Ok(incoming) => {
+                            let review = Review::from_texts(&self.doc.text(), &incoming);
+                            if review.is_empty() {
+                                let task = self.close_overlay();
+                                self.status = Some("no changes to review".to_string());
+                                task
+                            } else {
+                                let task = self.close_overlay();
+                                self.review = Some(review);
+                                self.review_index = 0;
+                                self.view_mode = ViewMode::Review;
+                                self.review_status();
+                                task
+                            }
+                        }
+                        Err(e) => {
+                            self.status = Some(format!("can't read {raw}: {e}"));
+                            self.close_overlay()
+                        }
+                    }
+                }
                 Overlay::None => Task::none(),
             },
             Message::OverlayClose => self.close_overlay(),
@@ -953,6 +1011,64 @@ impl App {
                     }
                     _ => ViewMode::Write,
                 };
+                Task::none()
+            }
+            Message::ImportOpen => self.open_overlay(Overlay::Import),
+            Message::ReviewNav(delta) => {
+                let Some(review) = &self.review else {
+                    return Task::none();
+                };
+                let last = review.change_count().saturating_sub(1) as i32;
+                self.review_index = (self.review_index as i32 + delta).clamp(0, last) as usize;
+                self.review_status();
+                self.review_snap_task()
+            }
+            Message::ReviewAccept => self.decide_current(Decision::Accepted),
+            Message::ReviewReject => self.decide_current(Decision::Rejected),
+            Message::ReviewUndo => self.decide_current(Decision::Pending),
+            Message::ReviewAcceptAll => {
+                if let Some(review) = &mut self.review {
+                    review.set_all(Decision::Accepted);
+                    self.review_status();
+                }
+                Task::none()
+            }
+            Message::ReviewRejectAll => {
+                if let Some(review) = &mut self.review {
+                    review.set_all(Decision::Rejected);
+                    self.review_status();
+                }
+                Task::none()
+            }
+            Message::ReviewApply => {
+                if let Some(review) = self.review.take() {
+                    // Recoverable: snapshot current before replacing (as restore does).
+                    if let Some(store) = &mut self.store {
+                        let _ = store.snapshot(
+                            &self.doc.text(),
+                            DraftKind::Auto,
+                            None,
+                            Self::unix_ms(),
+                        );
+                    }
+                    let accepted = review.accepted_count();
+                    // One atomic undo group: select-all + insert the result.
+                    self.doc.select_all();
+                    self.doc.insert_str(&review.applied());
+                    self.pending_revert = None;
+                    self.note_edit();
+                    self.view_mode = ViewMode::Write;
+                    self.status = Some(format!(
+                        "applied {accepted} change{} — Cmd+Z undoes",
+                        if accepted == 1 { "" } else { "s" }
+                    ));
+                }
+                Task::none()
+            }
+            Message::ReviewCancel => {
+                self.review = None;
+                self.view_mode = ViewMode::Write;
+                self.status = Some("review cancelled".to_string());
                 Task::none()
             }
             Message::ScrollBy(id, dy) => {
@@ -1162,6 +1278,7 @@ impl App {
                 Task::none()
             }
             "l" => self.open_overlay(Overlay::Goal),
+            "i" if shift => self.update(Message::ImportOpen),
             _ => Task::none(),
         }
     }
@@ -1217,6 +1334,7 @@ impl App {
                 let n = self.store.as_ref().map(|s| s.marked_count()).unwrap_or(0);
                 self.input = format!("Draft {}", n + 1);
             }
+            Overlay::Import => self.input.clear(),
             // The note input's text is set by NoteOpen (edit prefill or empty);
             // leave it and let the focus below land in it.
             Overlay::Note => {}
@@ -1248,6 +1366,44 @@ impl App {
             PREVIEW_SCROLL_ID,
             scrollable::RelativeOffset { x: 0.0, y },
         )
+    }
+
+    /// Decide the current change and advance to the next one.
+    fn decide_current(&mut self, decision: Decision) -> Task<Message> {
+        let Some(review) = &mut self.review else {
+            return Task::none();
+        };
+        review.set_decision(self.review_index, decision);
+        let last = review.change_count().saturating_sub(1);
+        if self.review_index < last {
+            self.review_index += 1;
+        }
+        self.review_status();
+        self.review_snap_task()
+    }
+
+    /// The chrome counter shown throughout a review.
+    fn review_status(&mut self) {
+        if let Some(review) = &self.review {
+            let count = review.change_count();
+            self.status = Some(format!(
+                "change {}/{} · {} accepted — A accept · R reject · U undo · Enter apply · Esc cancel",
+                (self.review_index + 1).min(count),
+                count,
+                review.accepted_count(),
+            ));
+        }
+    }
+
+    /// Keep the current change roughly in view (caret-ratio approximation).
+    fn review_snap_task(&self) -> Task<Message> {
+        let count = self.review.as_ref().map(|r| r.change_count()).unwrap_or(0);
+        let y = if count > 1 {
+            (self.review_index as f32 / (count - 1) as f32).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        iced::widget::operation::snap_to(REVIEW_SCROLL_ID, scrollable::RelativeOffset { x: 0.0, y })
     }
 
     /// Save, then publish the target at `index` in `publish_targets`,
@@ -1413,6 +1569,12 @@ impl App {
             ]
             .spacing(12)
             .into(),
+            Overlay::Import => row![
+                quiet_text("import edited copy".to_string()),
+                self.chrome_input("path to the edited .md"),
+            ]
+            .spacing(12)
+            .into(),
             Overlay::Publish => {
                 let mut list =
                     column![text("publish to").font(fonts::MONO).size(13).color(t.star)].spacing(6);
@@ -1459,6 +1621,21 @@ impl App {
             }
             ViewMode::DraftView => {
                 let body = self.draft_view_body(t);
+                let top = container(container(chrome).max_width(600)).center_x(Fill);
+                container(column![top, body].spacing(26))
+                    .style(outer_style)
+                    .width(Fill)
+                    .height(Fill)
+                    .padding(Padding {
+                        top: 76.0,
+                        right: 8.0,
+                        bottom: 0.0,
+                        left: 8.0,
+                    })
+                    .into()
+            }
+            ViewMode::Review => {
+                let body = self.review_body(t);
                 let top = container(container(chrome).max_width(600)).center_x(Fill);
                 container(column![top, body].spacing(26))
                     .style(outer_style)
@@ -1706,6 +1883,82 @@ impl App {
             .height(Fill)
             .into()
     }
+
+    /// The imported edited copy as an inline diff: deletions struck through,
+    /// insertions in the accent, rejected changes shown as kept-current /
+    /// discarded-incoming, and the change under the cursor in semibold.
+    fn review_body(&self, t: theme::Tokens) -> Element<'_, Message> {
+        use iced::widget::text::Span;
+        let Some(review) = &self.review else {
+            return space().into();
+        };
+        let bold = iced::Font {
+            weight: iced::font::Weight::Semibold,
+            ..fonts::WRITING
+        };
+        let mut rich: Vec<Span<'_>> = Vec::new();
+        for segment in review.segments() {
+            match segment {
+                Segment::Context(text) => rich.push(Span::new(text.to_string()).color(t.ink)),
+                Segment::Change { index, change } => {
+                    let current = index == self.review_index;
+                    // Deletion side (current document's words).
+                    if !change.old.is_empty() {
+                        let mut span = Span::new(change.old.clone());
+                        span = if change.decision == Decision::Rejected {
+                            span.color(t.ink) // kept
+                        } else {
+                            span.color(if current { t.quiet } else { t.whisper })
+                                .strikethrough(true)
+                        };
+                        if current {
+                            span = span.font(bold);
+                        }
+                        rich.push(span);
+                    }
+                    // Insertion side (incoming words).
+                    if !change.new.is_empty() {
+                        let mut span = Span::new(change.new.clone());
+                        span = if change.decision == Decision::Rejected {
+                            span.color(t.whisper).strikethrough(true) // discarded
+                        } else {
+                            span.color(t.star) // proposed or accepted
+                        };
+                        if current {
+                            span = span.font(bold);
+                        }
+                        rich.push(span);
+                    }
+                }
+            }
+        }
+        let body = iced::widget::rich_text(rich)
+            .font(fonts::WRITING)
+            .size(19)
+            .line_height(text::LineHeight::Relative(1.56))
+            .color(t.ink);
+        let column_content = container(body).max_width(600).padding(Padding {
+            top: 4.0,
+            right: 2.0,
+            bottom: 220.0,
+            left: 2.0,
+        });
+        scrollable(container(column_content).center_x(Fill))
+            .id(REVIEW_SCROLL_ID)
+            .width(Fill)
+            .height(Fill)
+            .into()
+    }
+}
+
+/// Expand a leading `~/` in a user-typed path against the home directory.
+fn expand_tilde_path(path: &str) -> PathBuf {
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest);
+        }
+    }
+    PathBuf::from(path)
 }
 
 /// The anchor quote for a note on a block: its first non-empty source line,
@@ -1781,6 +2034,34 @@ fn draft_view_key_events(
             keyboard::Key::Named(keyboard::key::Named::End) => {
                 Some(Message::Snap(DRAFT_VIEW_SCROLL_ID, 1.0))
             }
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
+/// Accept/reject review: J/K (or arrows) move between changes, A/R decide, U
+/// clears to pending, Shift+A/Shift+R decide all, Enter applies, Esc cancels.
+fn review_key_events(
+    event: iced::Event,
+    _status: event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
+        match key.as_ref() {
+            keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::ReviewCancel),
+            keyboard::Key::Named(keyboard::key::Named::Enter) => Some(Message::ReviewApply),
+            keyboard::Key::Named(keyboard::key::Named::ArrowDown)
+            | keyboard::Key::Character("j") => Some(Message::ReviewNav(1)),
+            keyboard::Key::Named(keyboard::key::Named::ArrowUp) | keyboard::Key::Character("k") => {
+                Some(Message::ReviewNav(-1))
+            }
+            keyboard::Key::Character("a") => Some(Message::ReviewAccept),
+            keyboard::Key::Character("r") => Some(Message::ReviewReject),
+            keyboard::Key::Character("u") => Some(Message::ReviewUndo),
+            keyboard::Key::Character("A") => Some(Message::ReviewAcceptAll),
+            keyboard::Key::Character("R") => Some(Message::ReviewRejectAll),
             _ => None,
         }
     } else {
@@ -2296,6 +2577,66 @@ mod tests {
         assert!(polaris_drafts::NoteStore::for_document(&path)
             .unwrap()
             .is_empty());
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn review_import_decide_apply_and_undo() {
+        let (mut app, _) = App::boot(None, false);
+        type_into(&mut app, "one two three four");
+
+        let dir = std::env::temp_dir().join("polaris-gui-review");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("edited.md");
+        std::fs::write(&path, "one TWO three FOUR").unwrap();
+
+        // Import the edited copy through the overlay.
+        app.input = path.to_string_lossy().into_owned();
+        app.overlay = Overlay::Import;
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+        assert_eq!(app.view_mode, ViewMode::Review);
+        assert_eq!(app.review.as_ref().unwrap().change_count(), 2);
+
+        // Accept the first change (auto-advances), reject the second.
+        let _ = app.update(Message::ReviewAccept);
+        assert_eq!(app.review_index, 1);
+        let _ = app.update(Message::ReviewReject);
+
+        // Apply: buffer takes the accepted change, keeps the rejected one.
+        let _ = app.update(Message::ReviewApply);
+        assert_eq!(app.view_mode, ViewMode::Write);
+        assert!(app.review.is_none());
+        assert_eq!(app.doc.text(), "one TWO three four");
+
+        // One undo group: Cmd+Z reverts the whole apply.
+        assert!(app.doc.undo());
+        assert_eq!(app.doc.text(), "one two three four");
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn review_cancel_leaves_the_buffer_untouched() {
+        let (mut app, _) = App::boot(None, false);
+        type_into(&mut app, "hello world");
+        let dir = std::env::temp_dir().join("polaris-gui-review-cancel");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("edited.md");
+        std::fs::write(&path, "hello brave world").unwrap();
+
+        app.input = path.to_string_lossy().into_owned();
+        app.overlay = Overlay::Import;
+        let _ = app.update(Message::OverlaySubmit { backwards: false });
+        assert_eq!(app.view_mode, ViewMode::Review);
+
+        let _ = app.update(Message::ReviewAcceptAll);
+        let _ = app.update(Message::ReviewCancel);
+        assert_eq!(app.view_mode, ViewMode::Write);
+        assert!(app.review.is_none());
+        assert_eq!(app.doc.text(), "hello world", "cancel touches nothing");
 
         std::fs::remove_file(&path).unwrap();
     }

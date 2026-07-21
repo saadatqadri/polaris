@@ -44,6 +44,12 @@ enum Item {
     Change(Change),
 }
 
+/// A renderable piece of the review, produced by [`Review::segments`].
+pub enum Segment<'a> {
+    Context(&'a str),
+    Change { index: usize, change: &'a Change },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Review {
     items: Vec<Item>,
@@ -88,6 +94,23 @@ impl Review {
             }));
         }
         Review { items }
+    }
+
+    /// The review as a flat, renderable sequence: fixed context interleaved
+    /// with changes, each change carrying its navigation index.
+    pub fn segments(&self) -> Vec<Segment<'_>> {
+        let mut out = Vec::new();
+        let mut index = 0;
+        for item in &self.items {
+            match item {
+                Item::Context(text) => out.push(Segment::Context(text)),
+                Item::Change(change) => {
+                    out.push(Segment::Change { index, change });
+                    index += 1;
+                }
+            }
+        }
+        out
     }
 
     pub fn changes(&self) -> impl Iterator<Item = &Change> {

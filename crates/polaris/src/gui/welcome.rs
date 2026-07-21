@@ -49,6 +49,11 @@ pointer is on — "cut this," "check this number"; **[** and **]** jump between
 notes, **x** resolves one, **Cmd+Shift+N** hides them for a clean read. Notes
 live beside the file, never in it — your prose stays only yours.
 
+Got edits back from someone? **Cmd+Shift+I** imports the edited copy and walks
+you through it change by change — **A** accepts, **R** rejects, **Enter**
+applies (one Cmd+Z undoes the lot). The machine never writes your buffer; you
+decide every word.
+
 ## Publish
 
 **Cmd+D** publishes. Configure a target in `~/.polaris.toml` — Notion
