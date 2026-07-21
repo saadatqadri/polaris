@@ -25,16 +25,17 @@ handover; the full plan is **`docs/PLAN.md`**.
 Design source of truth: **`design/DESIGN.md`** (tokens, type, keyboard maps,
 iPad interaction) + **`design/mockup.html`**.
 
-## Where we are (2026-07-16)
+## Where we are (2026-07-21)
 
-**Desktop (Rust/iced) — Phases 1–3 COMPLETE, released `v0.2.3`; Phase 4 P1
-(publish layer) shipped since.**
+**Desktop (Rust/iced) — Phases 1–3 COMPLETE, released `v0.2.3`; Phase 4
+COMPLETE on desktop (P1–P6, unreleased since v0.2.3).**
 - Cargo workspace: `polaris-core` (rope buffer, grapheme cursors, grouped
-  undo, autosave policy, word count, typography), `polaris-notion`
-  (markdown→blocks + API), `polaris-drafts` (content-addressed snapshots +
-  word diff), `polaris-publish` (the `Target` trait + Notion/Hugo adapters —
-  Phase 4 P1), `polaris-ffi` (uniffi bridge for iOS), `polaris` (the iced
-  GUI + clap CLI).
+  undo, autosave policy, word count, typography, byte↔char helpers),
+  `polaris-notion` (markdown→blocks + API), `polaris-drafts` (snapshots +
+  word diff + **inline notes** + **accept/reject review**), `polaris-publish`
+  (the `Target` trait + Notion/Hugo/HTML/Substack/LinkedIn adapters — Phase
+  4 P1–P2), `polaris-ffi` (uniffi bridge for iOS), `polaris` (the iced GUI
+  + clap CLI).
 - **Phase 1:** the editor — silent autosave, find, save-as, rename, deploy
   to Notion, preview, themes.
 - **Phase 2:** custom editor widget (Document is the single source of truth;
@@ -71,30 +72,34 @@ DONE, running on the owner's physical iPad.** (`apple/`, docs/IOS.md.)
 ## What's next — Phase 4 + the rest of the MVP
 
 Phase 4 is the big remaining MVP arc. Design doc: **`docs/PHASE4.md`**
-(approved 2026-07-16). **P1 shipped** — the rest is open.
-- **Write Once, Publish Anywhere** (owner direction, eventual business model).
-  **P1 done:** new `polaris-publish` crate — one `Target` trait (markdown
-  `Doc` in, `Outcome` out), Notion + Hugo adapters. Cmd+D goes through a
-  config-built registry (one target fires through, ≥2 show a ✧ picker);
-  `polaris publish [--to id] [--force]` CLI; `[hugo]` + `default_target` in
-  `~/.polaris.toml` (`[notion]` unchanged); `deploy` kept as the Notion
-  append/replace path. Hugo = front matter + write into `content/`, strips
-  the leading title H1, no git automation. **Next targets (P2):** Substack
-  (v1 format-and-paste → clipboard, then email-to-draft), HTML/PDF, LinkedIn
-  (format+copy). Clipboard plumbing (`Outcome::Clipboard { hint, body }`,
-  app does the copy) is in place, unused until P2.
-- **Accept/reject editing workflow** (P3) — import an edited copy → word-level
-  diff → accept/reject each change (Draft's model, no server), reusing the
-  `polaris-drafts` diff. Bound up with the AI.md critique pass (Phase 4+).
-- **Part C — Preview additions, both shipped:** the reading pointer (P5 —
-  keeps your place + arrow-key nav, round-trips the caret on Cmd+P) and
-  **inline notes** (P6 — N adds a block note in preview, [/] jump, x resolve,
-  Shift+X delete, Cmd+Shift+N hide; `NoteStore` in `polaris-drafts` persists
-  `.polaris/<name>/notes/live.json`, re-anchors by quote, Cmd+M freezes notes
-  with the draft). The human-first face of the AI.md margin — notes live in
-  the sidecar, never the buffer. v1 is block-granular; sub-sentence anchors +
-  true right-margin layout deferred.
-- These halves are independent of each other and of iOS.
+(approved 2026-07-16). **All desktop milestones (P1–P6) shipped 2026-07-16
+→ 07-21.** What remains is porting to iPad (see below) and the AI critique
+pass (own doc required, docs/AI.md).
+- **Write Once, Publish Anywhere** (P1+P2, done). `polaris-publish`: one
+  `Target` trait (markdown `Doc` in, `Outcome` out) over adapters — **Notion,
+  Hugo, HTML export, Substack, LinkedIn**. Cmd+D goes through a config-built
+  registry (one target fires through, ≥2 show a ✧ picker); `polaris publish
+  [--to id] [--force]` CLI; `deploy` kept as the Notion append/replace path.
+  Config in `~/.polaris.toml`: `[notion]`, `[hugo]`, `[html] out_dir`,
+  presence-only `[substack]`/`[linkedin]`, `default_target`. Hugo = front
+  matter + write into `content/`, strips the leading title H1. HTML = self-
+  contained file (fonts inlined); **PDF = print that from a browser**, no
+  webview. Substack/LinkedIn = format-and-copy via **arboard** (`set_html`
+  rich flavour / `set_text`). Substack email-to-draft investigated and
+  dropped (Substack has no email ingress/API — PHASE4.md spike).
+- **Accept/reject editing** (P3, done). Cmd+Shift+I imports an edited copy →
+  `Review` over the word diff → J/K walk, A/R decide, Enter applies as one
+  undo group, Esc cancels. `Review::applied()` is a pure fold in
+  `polaris-drafts`; the buffer is only written when the human accepts.
+- **Part C — Preview additions** (P5+P6, done). Reading pointer (Cmd+P
+  round-trips the caret; ↑↓ walk blocks) and **inline notes** (N add, [/]
+  jump, x resolve, Shift+X delete, Cmd+Shift+N hide; `NoteStore` persists
+  `.polaris/<name>/notes/live.json`, re-anchors by quote, Cmd+M freezes with
+  the draft — the human-first face of the AI.md margin). Also **inline images
+  in preview** (local render / remote placeholder, local-first).
+- Desktop Phase 4 is complete; next work is the **iPad port** of these
+  features (widen the FFI — e.g. `render_preview` block offsets for the
+  pointer). Owner's sequencing: desktop first (done), iPad next.
 
 iOS follow-ons (not blocking Phase 4): Focus mode (custom text surface),
 undo/selection through core, drafts + publish on iPad, TestFlight for the
@@ -102,12 +107,16 @@ friend.
 
 ## Known gaps / debt
 
-- **Desktop:** markdown source marks are quiet in write mode ✓ (custom
-  widget); preview scroll is caret-ratio approximate; theme override persists
-  to `~/.polaris.toml` (no live OS-theme following); Cmd+Q via the macOS app
-  menu may bypass close-flush (unverified). Notion: images/links → plain text.
-  Preview mermaid = labeled source, not rendered (deliberate — a JS
-  engine/webview is against the design).
+- **Desktop:** preview scroll is caret-ratio approximate (also how the
+  reading pointer and review changes follow — not pixel-exact); theme override
+  persists to `~/.polaris.toml` (no live OS-theme following); Cmd+Q via the
+  macOS app menu may bypass close-flush (unverified). Notion: images/links →
+  plain text. Preview: **local images render, remote/missing show a
+  placeholder** (no network fetch, by design); mermaid = labeled source, not
+  rendered (deliberate — a JS engine/webview is against the design). Publish
+  PDF = print the HTML export from a browser (no native offline PDF).
+  Substack/LinkedIn rich clipboard uses arboard; on Linux/X11 the paste needs
+  the app alive (fine in the GUI; a caveat for the short-lived CLI).
 - **iPad:** Focus mode not wired (needs custom surface); editing is native
   `UITextView` with core driving typography + word count (undo/selection are
   UIKit's, not core's yet); autosave is DocumentGroup's.

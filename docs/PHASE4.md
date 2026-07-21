@@ -380,14 +380,30 @@ construction. Nothing to strip.
 
 # Preview fidelity (small strand, rides with Part A)
 
-Tables ✓ and code blocks ✓ already. Still open, and settled here:
+Tables ✓ and code blocks ✓ already. Settled and shipped:
 
-- **Inline images in preview:** render remote-URL images; local-path images
-  show a labeled placeholder (a webview/asset pipeline is out of scope).
-  The HTML/PDF export target reuses whatever this produces.
+- **Inline images in preview ✅ (2026-07-21).** Shipped **inverted** from the
+  original sketch, on the local-first principle: a **local/relative** image
+  (resolved against the document's directory) renders from disk; a **remote**
+  URL shows a labeled placeholder — the reading surface never makes a network
+  request — as does a missing local file. This serves the common technical-doc
+  case (screenshots/diagrams beside the `.md`) without a fetch pipeline. An
+  image is its own preview block, so the reading pointer and notes still map
+  cleanly. (Supersedes open-question-era wording "render remote-URL images".)
 - **Mermaid:** stays parked — labeled source, not rendered (a JS engine or
   webview is against the design, per CLAUDE.md). Hugo and Notion pass it
   through; Substack/HTML get the labeled source. Documented limitation.
+
+## Substack email-to-draft — spike result (2026-07-21)
+
+Investigated as promised, and the honest finding is **don't build it for
+Substack**: Substack offers **no official post-by-email address and no
+publishing API**. (Post-by-email is a Ghost/Buttondown feature, not a Substack
+one.) The only ToS-safe path is the format-and-paste already shipped in P2 —
+render to rich HTML, land it on the clipboard, the writer pastes and presses
+publish. Revisit only if Substack ever ships an API or an email ingress; the
+markdown→HTML renderer is the reusable piece if they do. No unofficial-API
+scraping (fragile, against ToS) — stated once, holds.
 
 ---
 
@@ -409,15 +425,27 @@ it's the business direction and it forces the refactor everything else needs:
   lives in front matter, and keeping the H1 would double the heading on the
   rendered page (open question about front-matter format still open — we
   shipped TOML `+++`).
-- **P2 — Substack paste + LinkedIn + HTML/PDF.** The markdown→HTML renderer
-  (shared by Substack paste, HTML export, and PDF), clipboard outcomes,
-  LinkedIn formatting. **Done when:** Cmd+D offers a picker and each target
-  produces the right outcome line.
-- **P3 — accept/reject.** Review model in `polaris-drafts`, import pick,
-  review view mode, keybindings. **Done when:** import an edited copy →
-  walk changes → apply → Cmd+Z reverts, all from the keyboard.
-- **P4 — preview fidelity + Substack email investigation + docs.** Inline
-  images, the email-to-draft spike, limitations documented.
+- **P2 — Substack paste + LinkedIn + HTML/PDF. ✅ SHIPPED 2026-07-21.** One
+  markdown→HTML renderer in `polaris-publish` feeds three targets: **HTML
+  export** (self-contained `<slug>.html`, bundled faces base64-inlined),
+  **Substack** (rich HTML to the clipboard for format-and-paste), **LinkedIn**
+  (flattened plain text with Unicode sans-bold + `•` bullets). `Outcome::
+  Clipboard { hint, html, text }`; the app does the copy via **arboard**
+  (`set_html` rich flavour, else `set_text`) in both the GUI and CLI —
+  necessary because iced's clipboard is plain-text only. Config gained
+  `[html] out_dir` and presence-only `[substack]`/`[linkedin]`. **PDF:** the
+  HTML export *is* the PDF path (Print → Save as PDF from a browser/Preview);
+  no bundled webview, a deliberate call — a native offline PDF is deferred.
+- **P3 — accept/reject. ✅ SHIPPED 2026-07-21.** `Review` model in
+  `polaris-drafts` over the word diff (`applied()` is a pure fold: accepted →
+  incoming, rejected/pending → current). Cmd+Shift+I imports an edited copy
+  (chrome path input); a review view mode shows the inline diff (deletions
+  struck, insertions in the accent, current change in semibold); J/K move, A
+  accept, R reject, U clear, Shift+A/R decide all, Enter applies as **one undo
+  group** (current auto-snapshotted first), Esc cancels untouched.
+- **P4 — preview images + Substack email spike + docs. ✅ SHIPPED
+  2026-07-21.** Inline images render in preview (below); the email-to-draft
+  investigation and limitations are documented below.
 
 Part C slots in independently — it only touches the preview surface:
 
@@ -457,13 +485,14 @@ touches no publish or diff code.
    is no `content/` subdir default: `content_dir` in `[hugo]` is the exact
    directory Polaris writes into, so the writer points it wherever they like
    (e.g. `.../content/posts`).
-2. **Slug source:** title-derived (proposed) or the source filename? Title
-   reads better in URLs; filename is predictable. Proposed: title, with the
-   filename as fallback when there's no H1.
+2. **Slug source:** **Decided: title-derived** (shipped) — reads better in
+   URLs — with the filename as fallback when there's no H1.
 3. **Default publish target:** is Hugo the owner's day-to-day default (so
-   Enter on the picker goes there), with Notion opt-in? (Proposed: yes.)
-4. **Substack v1:** confirm format-and-paste ships first and email-to-draft
-   is investigation-only for the MVP. (Plan says yes; confirming.)
+   Enter on the picker goes there), with Notion opt-in? (Proposed: yes —
+   set `default_target = "hugo"` in `~/.polaris.toml`; still owner's call.)
+4. **Substack v1:** **Resolved 2026-07-21** — format-and-paste is shipped and
+   is the only viable path; email-to-draft is not buildable for Substack (no
+   email ingress / API — see the spike above).
 5. **Accept/reject import trigger:** is a file picker right, or should it
    watch a conventional "edited copy" path? (Proposed: explicit pick — no
    magic folders.)

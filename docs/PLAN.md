@@ -219,10 +219,12 @@ the original "invisible git" sketch to a content-addressed snapshot store
 and reserves annotation storage per `docs/AI.md`. Awaiting owner approval.
 
 ### Phase 4 — Editing workflow & publish anywhere
-**Design doc: [`docs/PHASE4.md`](PHASE4.md)** (approved 2026-07-16) — the
-publish-adapter layer (P1 shipped: `polaris-publish`, Hugo + Notion behind
-one `Target` trait, Cmd+D picker, `polaris publish` CLI), the accept/reject
-workflow, and Part C's Preview additions (reading pointer + inline notes).
+**Design doc: [`docs/PHASE4.md`](PHASE4.md)** (approved 2026-07-16) —
+**complete on desktop (P1–P6, 2026-07-16 → 07-21).** The publish-adapter
+layer (`polaris-publish`: Notion, Hugo, HTML, Substack, LinkedIn behind one
+`Target` trait; Cmd+D picker; `polaris publish` CLI), the accept/reject
+workflow, and Part C's Preview additions (reading pointer, inline notes,
+inline images). Remaining Phase 4 work is the iPad port and the AI pass.
 - Import an edited copy → word-level diff → accept/reject each change
   (Draft's collaboration model, without a server)
 - **Publish targets beyond Notion** (the Write-Once-Publish-Anywhere arc).
