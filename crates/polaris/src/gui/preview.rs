@@ -2,9 +2,10 @@
 //! to iced widgets via pulldown-cmark. A mode switch, not a split.
 
 use iced::widget::text::Span;
-use iced::widget::{column, container, rich_text, row, scrollable, space, text};
+use iced::widget::{column, container, image, rich_text, row, scrollable, space, text};
 use iced::{font, Background, Element, Fill, Font};
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use std::path::Path;
 
 use super::{fonts, theme};
 
@@ -52,8 +53,9 @@ pub fn view<'a, M: 'a>(
     t: theme::Tokens,
     pointer: Option<usize>,
     notes: &[NoteMark],
+    base: Option<&Path>,
 ) -> Element<'a, M> {
-    let blocks = render_blocks::<M>(source, t);
+    let blocks = render_blocks::<M>(source, t, base);
     let mut by_block: Vec<Vec<&NoteMark>> = vec![Vec::new(); blocks.len()];
     for note in notes {
         if note.block < by_block.len() {
@@ -111,7 +113,9 @@ fn note_element<'a, M: 'a>(note: &NoteMark, t: theme::Tokens) -> Element<'a, M> 
 /// exact block segmentation of [`view`] (both drive [`render_blocks`]), so a
 /// pointer index means the same block in both.
 pub fn block_offsets(source: &str, t: theme::Tokens) -> Vec<usize> {
-    render_blocks::<()>(source, t)
+    // Base is irrelevant to offsets: an image yields one block either way, so
+    // the block *count* (and thus every offset) matches `view`.
+    render_blocks::<()>(source, t, None)
         .into_iter()
         .map(|block| block.source)
         .collect()
@@ -144,7 +148,11 @@ fn gutter_row<'a, M: 'a>(block: Element<'a, M>, marked: bool, t: theme::Tokens) 
     .into()
 }
 
-fn render_blocks<'a, M: 'a>(source: &str, t: theme::Tokens) -> Vec<Block<'a, M>> {
+fn render_blocks<'a, M: 'a>(
+    source: &str,
+    t: theme::Tokens,
+    base: Option<&Path>,
+) -> Vec<Block<'a, M>> {
     let mut blocks: Vec<Block<'a, M>> = Vec::new();
     let mut spans: Vec<Span<'a>> = Vec::new();
     let mut bold = 0usize;
@@ -165,6 +173,9 @@ fn render_blocks<'a, M: 'a>(source: &str, t: theme::Tokens) -> Vec<Block<'a, M>>
     let mut item_start = 0usize;
     let mut code_start = 0usize;
     let mut table_start = 0usize;
+    // While inside an image, `(url, alt)` — alt text collects here, not spans.
+    let mut image_capture: Option<(String, String)> = None;
+    let mut image_start = 0usize;
 
     let current_font = |bold: usize, emphasis: usize, in_quote: bool| -> Option<Font> {
         let base = fonts::WRITING;
@@ -360,12 +371,28 @@ fn render_blocks<'a, M: 'a>(source: &str, t: theme::Tokens) -> Vec<Block<'a, M>>
                     }
                 }
             }
+            Event::Start(Tag::Image { dest_url, .. }) => {
+                // Render each image as its own block (its alt collects below).
+                flush_paragraph(&mut spans, &mut blocks, t, in_quote, para_start);
+                image_capture = Some((dest_url.to_string(), String::new()));
+                image_start = range.start;
+            }
+            Event::End(TagEnd::Image) => {
+                if let Some((url, alt)) = image_capture.take() {
+                    blocks.push(Block {
+                        element: image_element(&url, &alt, base, t),
+                        source: image_start,
+                    });
+                }
+            }
             Event::Start(Tag::Strong) => bold += 1,
             Event::End(TagEnd::Strong) => bold = bold.saturating_sub(1),
             Event::Start(Tag::Emphasis) => emphasis += 1,
             Event::End(TagEnd::Emphasis) => emphasis = emphasis.saturating_sub(1),
             Event::Text(chunk) => {
-                if let Some((_, code)) = code_block.as_mut() {
+                if let Some((_, alt)) = image_capture.as_mut() {
+                    alt.push_str(&chunk);
+                } else if let Some((_, code)) = code_block.as_mut() {
                     code.push_str(&chunk);
                 } else if let Some(cell) = table_cell.as_mut() {
                     let mut s = Span::new(chunk.to_string());
@@ -412,6 +439,40 @@ fn render_blocks<'a, M: 'a>(source: &str, t: theme::Tokens) -> Vec<Block<'a, M>>
     flush_paragraph(&mut spans, &mut blocks, t, in_quote, para_start);
 
     blocks
+}
+
+/// An image block. A local/relative path (resolved against the document's
+/// directory) renders from disk; a remote URL — no network in the reading
+/// surface — and a missing file show a quiet labeled placeholder. Design:
+/// docs/PHASE4.md (local-first: render what's on disk, don't fetch).
+fn image_element<'a, M: 'a>(
+    url: &str,
+    alt: &str,
+    base: Option<&Path>,
+    t: theme::Tokens,
+) -> Element<'a, M> {
+    let is_remote = url.starts_with("http://") || url.starts_with("https://");
+    if !is_remote {
+        let raw = Path::new(url);
+        let resolved = if raw.is_absolute() {
+            raw.to_path_buf()
+        } else {
+            base.map(|b| b.join(raw))
+                .unwrap_or_else(|| raw.to_path_buf())
+        };
+        if resolved.is_file() {
+            return image(iced::widget::image::Handle::from_path(resolved))
+                .width(Fill)
+                .into();
+        }
+    }
+    let label = if alt.trim().is_empty() { url } else { alt };
+    let note = if is_remote {
+        format!("🖼 {label}  ·  {url}")
+    } else {
+        format!("🖼 {label}  ·  not found")
+    };
+    text(note).font(fonts::MONO).size(13).color(t.quiet).into()
 }
 
 /// A fenced code block: never wrapped (ASCII art and diagram source stay
@@ -544,5 +605,13 @@ mod tests {
     #[test]
     fn block_offsets_is_empty_for_blank_source() {
         assert!(block_offsets("", theme::tokens(false)).is_empty());
+    }
+
+    #[test]
+    fn an_image_is_its_own_block() {
+        let src = "# T\n\npara\n\n![a diagram](pic.png)\n\nmore\n";
+        let offsets = block_offsets(src, theme::tokens(false));
+        assert_eq!(offsets.len(), 4, "heading, para, image, para");
+        assert_eq!(offsets[2], src.find("![a diagram]").unwrap());
     }
 }

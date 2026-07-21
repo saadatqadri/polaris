@@ -15,7 +15,7 @@ polaris-publish = { path = "../polaris-publish" }
 
 anyhow.workspace = true
 serde.workspace = true
-iced = { version = "0.14", features = ["tokio", "advanced"] }
+iced = { version = "0.14", features = ["tokio", "advanced", "image"] }
 dark-light = "2"
 pulldown-cmark = "0.11"
 clap = { version = "4.5", features = ["derive"] }

@@ -1683,11 +1683,13 @@ impl App {
                 // edge, clear of the text); the column centers inside it.
                 let source = self.doc.text();
                 let notes = self.note_marks();
+                let base = self.doc.path().and_then(|p| p.parent());
                 let column_content = container(preview::view(
                     &source,
                     t,
                     Some(self.preview_pointer),
                     &notes,
+                    base,
                 ))
                 .max_width(600)
                 .padding(Padding {
