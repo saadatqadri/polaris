@@ -3564,7 +3564,7 @@ dependencies = [
 
 [[package]]
 name = "polaris"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "arboard",
@@ -3585,7 +3585,7 @@ dependencies = [
 
 [[package]]
 name = "polaris-core"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "ropey",
  "unicode-segmentation",
@@ -3593,7 +3593,7 @@ dependencies = [
 
 [[package]]
 name = "polaris-drafts"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3605,7 +3605,7 @@ dependencies = [
 
 [[package]]
 name = "polaris-ffi"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "polaris-core",
  "pulldown-cmark",
@@ -3615,7 +3615,7 @@ dependencies = [
 
 [[package]]
 name = "polaris-notion"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "pulldown-cmark",
@@ -3625,7 +3625,7 @@ dependencies = [
 
 [[package]]
 name = "polaris-publish"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",

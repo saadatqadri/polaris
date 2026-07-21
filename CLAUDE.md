@@ -27,8 +27,8 @@ iPad interaction) + **`design/mockup.html`**.
 
 ## Where we are (2026-07-21)
 
-**Desktop (Rust/iced) — Phases 1–3 COMPLETE, released `v0.2.3`; Phase 4
-COMPLETE on desktop (P1–P6, unreleased since v0.2.3).**
+**Desktop (Rust/iced) — Phases 1–4 COMPLETE on desktop (P1–P6), released
+`v0.3.0` (2026-07-21).**
 - Cargo workspace: `polaris-core` (rope buffer, grapheme cursors, grouped
   undo, autosave policy, word count, typography, byte↔char helpers),
   `polaris-notion` (markdown→blocks + API), `polaris-drafts` (snapshots +

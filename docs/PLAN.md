@@ -69,13 +69,15 @@ The sections below (§3–§4) are the historical design record of the GUI
 refactor — kept because the architecture decisions still hold. Current
 status, condensed (see `CLAUDE.md` for the working handover):
 
-**Desktop (Rust/iced) — Phases 1–3 COMPLETE, released `v0.2.3`.** A Cargo
+**Desktop (Rust/iced) — Phases 1–4 COMPLETE, released `v0.3.0`.** A Cargo
 workspace (`polaris-core`, `polaris-notion`, `polaris-drafts`,
-`polaris-ffi`, `polaris`): the custom editor widget with Document as the
-single source of truth, silent autosave, find, rename, deploy to Notion,
-preview, the writing modes (typewriter/focus/Hemingway/zen/goals), and
-drafts (mark/browse/word-diff/restore). `install.sh` + tag-triggered
-releases; welcome tour; CI green on every push.
+`polaris-publish`, `polaris-ffi`, `polaris`): the custom editor widget with
+Document as the single source of truth, silent autosave, find, rename,
+preview, the writing modes (typewriter/focus/Hemingway/zen/goals), drafts
+(mark/browse/word-diff/restore), publish-anywhere (Notion/Hugo/HTML/Substack/
+LinkedIn), accept/reject editing, and Preview's reading pointer + inline
+notes + images. `install.sh` + tag-triggered releases; welcome tour; CI
+green on every push.
 
 **iPad (SwiftUI over the core) — Phase 6 pulled forward, i0–i3 + modes
 running on the owner's device.** `apple/` is a native SwiftUI DocumentGroup
