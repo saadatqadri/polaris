@@ -135,8 +135,112 @@ differs.
   on the native UITextView (typewriter holds the caret at 45%; Hemingway
   blocks deletions). Focus dimming needs per-paragraph styling (later);
   find/drafts/publish join the menu as they land.
-- **i4 — Drafts + publish.** FFI to `polaris-drafts`; the publish targets.
+- **i4+ — desktop parity.** Superseded by the detailed plan below.
 - **Later:** custom text view for writing modes; iPhone layout.
+
+---
+
+## Phase 6 continued — desktop parity (2026-07-22)
+
+> **Owner decisions (2026-07-22):** history storage = **B, sidecar via folder
+> grant** (keep the local-first promise — history travels with the folder and
+> iCloud-syncs). First up = **preview parity + reading pointer (i4 + i5)**;
+> build those, get them on the device, then reassess before committing
+> further.
+
+Desktop reached **Phase 4 (v0.3.0)**: publish-anywhere (Notion/Hugo/HTML/
+Substack/LinkedIn), accept/reject editing, and Preview's reading pointer +
+inline notes + images — on top of Phases 1–3 (editor, writing modes, drafts).
+The iPad is at **i0–i3 + the modes control**. This plans the catch-up.
+
+### The two decisions that shape everything
+
+**1. Where does document history live on iOS?** Desktop keeps drafts *and*
+notes in a `.polaris/<name>/` sidecar **next to the file**. On iOS,
+`DocumentGroup` grants a security-scoped URL to the *document*, not its parent
+folder, so writing a sibling directory is not reliably permitted.
+
+- **(A) App-container store, keyed to the document** by a security-scoped
+  bookmark / stable id. Reliable, zero extra permission UX. Cost: history does
+  **not** travel with the `.md` and isn't iCloud-synced.
+- **(B — DECIDED 2026-07-22) True sidecar via a one-time folder-access
+  grant** — the writer points Polaris at the folder once; we persist a
+  security-scoped bookmark and coordinate writes (`NSFileCoordinator`). The
+  real `.polaris/` sidecar travels with the folder and iCloud-syncs, keeping
+  the desktop's local-first guarantee. Cost: onboarding friction + coordinated
+  writes — accepted for the principle.
+- **(C) Defer** drafts + notes on iPad; ship the storage-free features first.
+
+This gates **drafts (i7)** and **notes (i8)** only — the folder-grant work
+lands there, not before. Everything up to and including i6 is storage-free.
+
+**2. What owns the editing buffer?** Today the Swift `String` binding is the
+source of truth and `polaris-core` is called **statelessly** (word count,
+smart punctuation, preview render). That is fast and fine. The parity features
+that need exact source offsets — the reading pointer's caret round-trip, notes
+re-anchoring, applying a review — can all work against the plain markdown
+string + the text view's selection, so **we keep the Swift-string model** and
+build the custom, core-driven text surface only at **i10** (writing-mode
+fidelity / Focus), where it is genuinely required. No big refactor up front.
+
+### What crosses the FFI vs. what is SwiftUI
+
+The split holds: push logic into Rust (`polaris-core` / `-drafts` /
+`-publish`) behind `#[uniffi::export]`, keep SwiftUI thin.
+
+| Feature | FFI additions | SwiftUI |
+|---|---|---|
+| Preview fidelity | `PreviewBlock::Table`, `::Image{url,alt}` | render tables; remote image, placeholder |
+| Reading pointer | `source` byte offset per `PreviewBlock` (+ `byte_to_char`) | gutter marker, ↑↓ / swipe, caret round-trip |
+| Publish | pure renderers + async Notion deploy → `Outcome` | target picker, config, `UIPasteboard`(HTML), Files write, share sheet |
+| Drafts | `DraftStore` with an iOS root path | drafts browser + word-diff view |
+| Inline notes | `NoteStore` with an iOS root path | notes in preview, N/[/]/x, input |
+| Accept/reject | `Review` + full-text apply | Files import, diff view, decide, reload |
+| Focus / modes | (custom text view — mostly Swift) | per-paragraph dimming, quiet marks |
+
+### Milestones (cost-ordered; independent unless noted)
+
+- **i4 — Preview fidelity: tables + images.** `render_preview` gains
+  `Table`/`Image` blocks; Swift renders them. *Image nuance:* iOS local-file
+  access hits the same folder-permission wall, so v1 renders **remote** images
+  (`AsyncImage`) and shows a placeholder for local paths — the honest inverse
+  of desktop until decision #1's storage grant exists. Storage-free.
+- **i5 — Reading pointer.** Block source offsets in the FFI; the slim marker,
+  ↑↓ nav, and Cmd+P caret round-trip in SwiftUI. Mirrors desktop P5.
+  Storage-free.
+- **i6 — Publish.** The business direction, on mobile. The FFI exposes the
+  pure renderers (Hugo file body, HTML, Substack HTML, LinkedIn text, Notion
+  deploy as an async call); Swift owns the clipboard (`UIPasteboard` sets the
+  HTML flavour for Substack), the Files write (HTML export), and the share
+  sheet. Config in app settings. Storage-free.
+- **i7 — Storage + Drafts.** Resolve decision #1, then `DraftStore` over the
+  FFI with an iOS root path, plus a SwiftUI drafts browser (mark, browse,
+  word-diff, restore). Unblocks notes.
+- **i8 — Inline notes.** `NoteStore` on the i7 storage; notes in preview,
+  N / [ ] / x, re-anchor on entering preview, Cmd+M freeze. Mirrors P6.
+- **i9 — Accept/reject.** `Review` over the FFI; Files import → diff view →
+  decide → apply (reloads the text view, one undo group). Mirrors P3.
+- **i10 — Writing-mode fidelity + Focus.** The custom `UITextView` subclass:
+  per-paragraph focus dimming, quiet markdown marks, typewriter polish — the
+  long-deferred big effort, and the door to editing-through-core (undo /
+  selection). The desktop's Phase-2-widget analogue.
+- **Chrome parity (ongoing, small):** find (Cmd+F), session goals (Cmd+L),
+  zen — fold in opportunistically.
+- **TestFlight** for the friend once i5/i6 add real value — an orthogonal
+  distribution step (needs the App Store Connect record).
+
+### Prerequisites — unchanged, and already met
+
+Xcode + an Apple Developer account (both in hand — the device is provisioned;
+we just shipped a device build of v0.3.0). Each milestone's loop is the one we
+used: build the xcframework (`apple/setup.sh`) → Xcode build → install/launch
+on the iPad.
+
+### Settled
+
+1. **History storage on iOS** → **B, sidecar via folder grant** (2026-07-22).
+2. **Lead priority** → **preview parity + reading pointer (i4 + i5)**.
+3. **Scope** → build i4 + i5, get them on the device, reassess.
 
 ## Prerequisites (owner) — the honest gate
 
