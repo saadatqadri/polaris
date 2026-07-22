@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use polaris_core::Document;
 
 mod preview;
-pub use preview::{PreviewBlock, PreviewSpan};
+pub use preview::{PreviewBlock, PreviewSpan, TableCell, TableRow};
 
 uniffi::setup_scaffolding!();
 

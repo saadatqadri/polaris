@@ -13,6 +13,18 @@ pub struct PreviewSpan {
     pub code: bool,
 }
 
+/// One table cell — a run of inline spans.
+#[derive(uniffi::Record, Clone, Debug, PartialEq, Eq)]
+pub struct TableCell {
+    pub spans: Vec<PreviewSpan>,
+}
+
+/// One table row. In a `Table` block the first row is the header.
+#[derive(uniffi::Record, Clone, Debug, PartialEq, Eq)]
+pub struct TableRow {
+    pub cells: Vec<TableCell>,
+}
+
 /// A rendered block. Headings carry a level (1–6); list items carry their
 /// marker; code blocks carry raw text + language.
 #[derive(uniffi::Enum, Debug, PartialEq, Eq)]
@@ -36,6 +48,16 @@ pub enum PreviewBlock {
         language: String,
         text: String,
     },
+    /// A table; `rows[0]` is the header row.
+    Table {
+        rows: Vec<TableRow>,
+    },
+    /// An image reference. The native view renders remote URLs and shows a
+    /// placeholder for local paths (no folder access yet — docs/IOS.md i4).
+    Image {
+        url: String,
+        alt: String,
+    },
     Rule,
 }
 
@@ -51,6 +73,9 @@ pub fn render(markdown: &str) -> Vec<PreviewBlock> {
     let mut code: Option<(String, String)> = None;
     let mut list_stack: Vec<Option<u64>> = Vec::new();
     let mut in_item = false;
+    let mut table: Option<Vec<TableRow>> = None;
+    let mut table_cell: Option<Vec<PreviewSpan>> = None;
+    let mut image: Option<(String, String)> = None; // (url, alt)
 
     let push_text = |spans: &mut Vec<PreviewSpan>, text: &str, bold, italic, code| {
         spans.push(PreviewSpan {
@@ -127,21 +152,58 @@ pub fn render(markdown: &str) -> Vec<PreviewBlock> {
                 });
             }
             Event::Rule => blocks.push(PreviewBlock::Rule),
+            Event::Start(Tag::Table(_)) => table = Some(Vec::new()),
+            Event::End(TagEnd::Table) => {
+                if let Some(rows) = table.take() {
+                    blocks.push(PreviewBlock::Table { rows });
+                }
+            }
+            Event::Start(Tag::TableHead) | Event::Start(Tag::TableRow) => {
+                if let Some(rows) = table.as_mut() {
+                    rows.push(TableRow { cells: Vec::new() });
+                }
+            }
+            Event::End(TagEnd::TableHead) | Event::End(TagEnd::TableRow) => {}
+            Event::Start(Tag::TableCell) => table_cell = Some(Vec::new()),
+            Event::End(TagEnd::TableCell) => {
+                if let (Some(spans), Some(rows)) = (table_cell.take(), table.as_mut()) {
+                    if let Some(row) = rows.last_mut() {
+                        row.cells.push(TableCell { spans });
+                    }
+                }
+            }
+            Event::Start(Tag::Image { dest_url, .. }) => {
+                image = Some((dest_url.to_string(), String::new()));
+            }
+            Event::End(TagEnd::Image) => {
+                if let Some((url, alt)) = image.take() {
+                    blocks.push(PreviewBlock::Image { url, alt });
+                }
+            }
             Event::Start(Tag::Strong) => bold += 1,
             Event::End(TagEnd::Strong) => bold = bold.saturating_sub(1),
             Event::Start(Tag::Emphasis) => italic += 1,
             Event::End(TagEnd::Emphasis) => italic = italic.saturating_sub(1),
             Event::Text(t) => {
-                if let Some((_, body)) = code.as_mut() {
+                if let Some((_, alt)) = image.as_mut() {
+                    alt.push_str(&t);
+                } else if let Some((_, body)) = code.as_mut() {
                     body.push_str(&t);
+                } else if let Some(cell) = table_cell.as_mut() {
+                    push_text(cell, &t, bold > 0, italic > 0, false);
                 } else {
                     push_text(&mut spans, &t, bold > 0, italic > 0, false);
                 }
             }
-            Event::Code(c) => push_text(&mut spans, &c, false, false, true),
+            Event::Code(c) => match table_cell.as_mut() {
+                Some(cell) => push_text(cell, &c, false, false, true),
+                None => push_text(&mut spans, &c, false, false, true),
+            },
             Event::SoftBreak | Event::HardBreak => {
                 if let Some((_, body)) = code.as_mut() {
                     body.push('\n');
+                } else if let Some(cell) = table_cell.as_mut() {
+                    push_text(cell, " ", false, false, false);
                 } else {
                     push_text(&mut spans, " ", false, false, false);
                 }
@@ -194,5 +256,25 @@ mod tests {
         let ol = render("1. a\n2. b");
         assert!(matches!(&ol[0], PreviewBlock::ListItem { marker, .. } if marker == "1."));
         assert!(matches!(&ol[1], PreviewBlock::ListItem { marker, .. } if marker == "2."));
+    }
+
+    #[test]
+    fn tables_and_images() {
+        let b = render("| A | B |\n|---|---|\n| 1 | 2 |\n\n![a cat](cat.png)");
+        let PreviewBlock::Table { rows } = &b[0] else {
+            panic!("expected a table, got {:?}", b[0]);
+        };
+        assert_eq!(rows.len(), 2, "header + one body row");
+        assert_eq!(rows[0].cells.len(), 2);
+        assert_eq!(rows[0].cells[0].spans[0].text, "A");
+        assert_eq!(rows[1].cells[1].spans[0].text, "2");
+
+        assert_eq!(
+            b[1],
+            PreviewBlock::Image {
+                url: "cat.png".into(),
+                alt: "a cat".into()
+            }
+        );
     }
 }
