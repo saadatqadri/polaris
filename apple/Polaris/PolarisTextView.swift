@@ -11,6 +11,9 @@ import UIKit
 
 struct PolarisTextView: UIViewRepresentable {
     @Binding var text: String
+    // The caret's UTF-16 offset, reported out so preview can start its reading
+    // pointer where you were writing.
+    @Binding var caret: Int
     var dark: Bool
     var hemingway: Bool = false
     var typewriter: Bool = false
@@ -54,13 +57,22 @@ struct PolarisTextView: UIViewRepresentable {
         ]
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+    func makeCoordinator() -> Coordinator { Coordinator(text: $text, caret: $caret) }
 
     final class Coordinator: NSObject, UITextViewDelegate {
         @Binding var text: String
+        @Binding var caret: Int
         var hemingway = false
         var typewriter = false
-        init(text: Binding<String>) { _text = text }
+        init(text: Binding<String>, caret: Binding<Int>) {
+            _text = text
+            _caret = caret
+        }
+
+        private func reportCaret(_ tv: UITextView) {
+            guard let range = tv.selectedTextRange else { return }
+            caret = tv.offset(from: tv.beginningOfDocument, to: range.end)
+        }
 
         func textView(
             _ tv: UITextView,
@@ -93,10 +105,12 @@ struct PolarisTextView: UIViewRepresentable {
 
         func textViewDidChange(_ tv: UITextView) {
             text = tv.text
+            reportCaret(tv)
             if typewriter { holdCaret(tv) }
         }
 
         func textViewDidChangeSelection(_ tv: UITextView) {
+            reportCaret(tv)
             if typewriter { holdCaret(tv) }
         }
 

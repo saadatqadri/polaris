@@ -20,6 +20,13 @@ pub fn render_preview(markdown: String) -> Vec<PreviewBlock> {
     preview::render(&markdown)
 }
 
+/// The source byte offset where each preview block begins, in `render_preview`
+/// order — lets the native reading pointer map a block to a caret position.
+#[uniffi::export]
+pub fn preview_block_offsets(markdown: String) -> Vec<u64> {
+    preview::block_offsets(&markdown)
+}
+
 /// A live document the Swift layer drives. Interior `Mutex` because uniffi
 /// objects are shared as `Arc` and their methods take `&self`.
 #[derive(uniffi::Object)]

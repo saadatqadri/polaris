@@ -7,6 +7,10 @@ struct WritingView: View {
     @State private var preview = false
     @State private var hemingway = false
     @State private var typewriter = false
+    // The editor caret (UTF-16 offset) and the preview reading pointer (block
+    // index). Entering preview starts the pointer on the caret's block.
+    @State private var caret = 0
+    @State private var pointer = 0
 
     private var dark: Bool { scheme == .dark }
 
@@ -19,11 +23,11 @@ struct WritingView: View {
 
             Group {
                 if preview {
-                    PreviewView(markdown: document.text, dark: dark)
+                    PreviewView(markdown: document.text, dark: dark, pointer: $pointer)
                         .transition(.opacity)
                 } else {
                     PolarisTextView(
-                        text: $document.text, dark: dark,
+                        text: $document.text, caret: $caret, dark: dark,
                         hemingway: hemingway, typewriter: typewriter
                     )
                     .frame(maxWidth: 620)
@@ -94,7 +98,24 @@ struct WritingView: View {
     }
 
     private func setPreview(_ on: Bool) {
+        if on { pointer = blockAtCaret() }
         withAnimation(.easeInOut(duration: 0.15)) { preview = on }
+    }
+
+    // The preview block containing the editor caret — where the reading
+    // pointer starts. Maps the caret's UTF-16 offset to a source byte offset,
+    // then to the last block that begins at or before it.
+    private func blockAtCaret() -> Int {
+        let s = document.text
+        let offsets = previewBlockOffsets(markdown: s)
+        guard !offsets.isEmpty else { return 0 }
+        let u16 = min(max(caret, 0), s.utf16.count)
+        let u16idx = s.utf16.index(s.utf16.startIndex, offsetBy: u16)
+        guard let sIdx = u16idx.samePosition(in: s) else { return 0 }
+        let byte = UInt64(s.utf8.distance(from: s.utf8.startIndex, to: sIdx))
+        var idx = 0
+        for (i, off) in offsets.enumerated() where off <= byte { idx = i }
+        return idx
     }
 
     private var chrome: some View {

@@ -7,23 +7,57 @@ import SwiftUI
 struct PreviewView: View {
     let markdown: String
     var dark: Bool
+    // The reading pointer: the block index the marker sits on. Tap a block or
+    // press ↑↓ to move it.
+    @Binding var pointer: Int
 
     private var blocks: [PreviewBlock] { renderPreview(markdown: markdown) }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                    view(for: block)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(Array(blocks.enumerated()), id: \.offset) { i, block in
+                        row(i, block)
+                    }
                 }
+                .frame(maxWidth: 620, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 24)
+                .padding(.top, 4)
+                .padding(.bottom, 220)
             }
-            .frame(maxWidth: 620, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.horizontal, 24)
-            .padding(.top, 4)
-            .padding(.bottom, 220)
+            .background(Tokens.bg(dark))
+            .focusable()
+            .onKeyPress(.upArrow) { move(-1); return .handled }
+            .onKeyPress(.downArrow) { move(1); return .handled }
+            .onChange(of: pointer) { _, p in
+                withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(p, anchor: .center) }
+            }
+            .onAppear { proxy.scrollTo(pointer, anchor: .center) }
         }
-        .background(Tokens.bg(dark))
+    }
+
+    // A block with its reading-pointer gutter: a slim accent rule on the
+    // current block, an equal empty gutter on the rest so text never shifts.
+    @ViewBuilder
+    private func row(_ i: Int, _ block: PreviewBlock) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Rectangle()
+                .fill(i == pointer ? Tokens.star(dark).opacity(0.75) : Color.clear)
+                .frame(width: 2)
+                .cornerRadius(1)
+            view(for: block)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { pointer = i }
+        .id(i)
+    }
+
+    private func move(_ delta: Int) {
+        let last = max(0, blocks.count - 1)
+        pointer = min(max(0, pointer + delta), last)
     }
 
     @ViewBuilder

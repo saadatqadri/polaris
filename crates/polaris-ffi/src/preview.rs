@@ -61,10 +61,26 @@ pub enum PreviewBlock {
     Rule,
 }
 
-/// Parse `markdown` into preview blocks.
+/// Parse `markdown` into preview blocks (dropping source offsets).
 pub fn render(markdown: &str) -> Vec<PreviewBlock> {
+    walk(markdown).0
+}
+
+/// The source byte offset where each preview block begins, in the same order
+/// as [`render`] — the reading pointer maps a block back to a caret position.
+pub fn block_offsets(markdown: &str) -> Vec<u64> {
+    walk(markdown).1.into_iter().map(|o| o as u64).collect()
+}
+
+/// Parse `markdown` into preview blocks paired with their source byte offsets.
+/// One walk, so blocks and offsets always agree.
+fn walk(markdown: &str) -> (Vec<PreviewBlock>, Vec<usize>) {
     let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH;
     let mut blocks: Vec<PreviewBlock> = Vec::new();
+    let mut offsets: Vec<usize> = Vec::new();
+    // The source offset where the block currently being built began; recorded
+    // at each block-opening Start event, used at the matching End push.
+    let mut block_start = 0usize;
     let mut spans: Vec<PreviewSpan> = Vec::new();
     let mut bold = 0usize;
     let mut italic = 0usize;
@@ -86,17 +102,25 @@ pub fn render(markdown: &str) -> Vec<PreviewBlock> {
         });
     };
 
-    for event in Parser::new_ext(markdown, options) {
+    for (event, range) in Parser::new_ext(markdown, options).into_offset_iter() {
         match event {
-            Event::Start(Tag::Heading { level, .. }) => heading = Some(level),
+            Event::Start(Tag::Heading { level, .. }) => {
+                heading = Some(level);
+                block_start = range.start;
+            }
             Event::End(TagEnd::Heading(_)) => {
                 let level = heading.take().unwrap_or(HeadingLevel::H3);
                 blocks.push(PreviewBlock::Heading {
                     level: level as u8,
                     spans: std::mem::take(&mut spans),
                 });
+                offsets.push(block_start);
             }
-            Event::Start(Tag::Paragraph) => {}
+            Event::Start(Tag::Paragraph) => {
+                if !in_item {
+                    block_start = range.start;
+                }
+            }
             Event::End(TagEnd::Paragraph) => {
                 if in_item {
                     // handled at item end
@@ -104,10 +128,12 @@ pub fn render(markdown: &str) -> Vec<PreviewBlock> {
                     blocks.push(PreviewBlock::Quote {
                         spans: std::mem::take(&mut spans),
                     });
+                    offsets.push(block_start);
                 } else if !spans.is_empty() {
                     blocks.push(PreviewBlock::Paragraph {
                         spans: std::mem::take(&mut spans),
                     });
+                    offsets.push(block_start);
                 }
             }
             Event::Start(Tag::BlockQuote(_)) => in_quote = true,
@@ -118,6 +144,7 @@ pub fn render(markdown: &str) -> Vec<PreviewBlock> {
                     pulldown_cmark::CodeBlockKind::Indented => String::new(),
                 };
                 code = Some((lang, String::new()));
+                block_start = range.start;
             }
             Event::End(TagEnd::CodeBlock) => {
                 if let Some((language, text)) = code.take() {
@@ -125,6 +152,7 @@ pub fn render(markdown: &str) -> Vec<PreviewBlock> {
                         language,
                         text: text.trim_end().to_string(),
                     });
+                    offsets.push(block_start);
                 }
             }
             Event::Start(Tag::List(start)) => list_stack.push(start),
@@ -134,6 +162,7 @@ pub fn render(markdown: &str) -> Vec<PreviewBlock> {
             Event::Start(Tag::Item) => {
                 in_item = true;
                 spans.clear();
+                block_start = range.start;
             }
             Event::End(TagEnd::Item) => {
                 in_item = false;
@@ -150,12 +179,20 @@ pub fn render(markdown: &str) -> Vec<PreviewBlock> {
                     marker,
                     spans: std::mem::take(&mut spans),
                 });
+                offsets.push(block_start);
             }
-            Event::Rule => blocks.push(PreviewBlock::Rule),
-            Event::Start(Tag::Table(_)) => table = Some(Vec::new()),
+            Event::Rule => {
+                blocks.push(PreviewBlock::Rule);
+                offsets.push(range.start);
+            }
+            Event::Start(Tag::Table(_)) => {
+                table = Some(Vec::new());
+                block_start = range.start;
+            }
             Event::End(TagEnd::Table) => {
                 if let Some(rows) = table.take() {
                     blocks.push(PreviewBlock::Table { rows });
+                    offsets.push(block_start);
                 }
             }
             Event::Start(Tag::TableHead) | Event::Start(Tag::TableRow) => {
@@ -174,10 +211,12 @@ pub fn render(markdown: &str) -> Vec<PreviewBlock> {
             }
             Event::Start(Tag::Image { dest_url, .. }) => {
                 image = Some((dest_url.to_string(), String::new()));
+                block_start = range.start;
             }
             Event::End(TagEnd::Image) => {
                 if let Some((url, alt)) = image.take() {
                     blocks.push(PreviewBlock::Image { url, alt });
+                    offsets.push(block_start);
                 }
             }
             Event::Start(Tag::Strong) => bold += 1,
@@ -211,7 +250,7 @@ pub fn render(markdown: &str) -> Vec<PreviewBlock> {
             _ => {}
         }
     }
-    blocks
+    (blocks, offsets)
 }
 
 #[cfg(test)]
@@ -256,6 +295,20 @@ mod tests {
         let ol = render("1. a\n2. b");
         assert!(matches!(&ol[0], PreviewBlock::ListItem { marker, .. } if marker == "1."));
         assert!(matches!(&ol[1], PreviewBlock::ListItem { marker, .. } if marker == "2."));
+    }
+
+    #[test]
+    fn block_offsets_match_render_order() {
+        let src = "# Title\n\nFirst para.\n\n- one\n- two\n\n![x](p.png)\n";
+        let blocks = render(src);
+        let offsets = block_offsets(src);
+        // heading, para, item, item, image = 5 blocks, 5 offsets, ascending.
+        assert_eq!(blocks.len(), offsets.len());
+        assert_eq!(offsets.len(), 5);
+        assert!(offsets.windows(2).all(|w| w[0] <= w[1]));
+        assert_eq!(offsets[0], src.find("# Title").unwrap() as u64);
+        assert_eq!(offsets[1], src.find("First").unwrap() as u64);
+        assert_eq!(offsets[4], src.find("![x]").unwrap() as u64);
     }
 
     #[test]
